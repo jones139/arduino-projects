@@ -32,23 +32,109 @@
 
 // Data wire is plugged into port 2 on the Arduino
 #define ONE_WIRE_BUS 2
+#define LCD_PINS 12,11,10,6,5,4,3  // LiqudCrystal Pins
 #define TEMPERATURE_PRECISION 9
-#define NSAMPLES 10000   // Number of analog samples to collect for
-// load factor calculation.
-int acVoltsPin = A0;  // Pin connected to AC voltage signal.
+#define NSAMPLES 10000     // Number of analog samples to collect for
+                           // load factor calculation.
+#define AC_VOLTS_PIN A0      // Pin connected to AC voltage signal.
+// OneWire address of the collector inlet temp sensor
+#define T1_ADDRESS {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00}
+// OneWire address of the collector outlet temp sensor
+#define T2_ADDRESS {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00}
 
-LiquidCrystal lcd(12,11,10,6,5,4,3);
+#define CP 4200    // Specific Heat Capacity of water J/kg/K
+#define M_CAL 0.1  // water flow rate at 100% load factor (kg/s).
 
-// Setup a oneWire instance to communicate with any OneWire devices (not just Maxim/Dallas temperature ICs)
+#define HOUR_MILLIS 3600000  // number of miliseconds in an hour.
+#define DAY_MILLIS 86400000  // number of miliseconds in a day.
+
+
+// Initialise Liqud Crystal Display and oneWire bus 
+// with DallasTemperature library, which is used
+// for temperature measurement.
+LiquidCrystal lcd(LCD_PINS);
 OneWire oneWire(ONE_WIRE_BUS);
-
-// Pass our oneWire reference to Dallas Temperature. 
 DallasTemperature sensors(&oneWire);
 
+// Variables for Temperature Masurement
 int numberOfDevices; // Number of temperature devices found
-
 DeviceAddress tempDeviceAddress; // We'll use this variable to store a found device address
+DeviceAddress t1Address = T1_ADDRESS;
+DeviceAddress t2Address = T2_ADDRESS;
 
+
+// function to print a device address
+void printAddress(DeviceAddress deviceAddress)
+{
+  for (uint8_t i = 0; i < 8; i++)
+  {
+    if (deviceAddress[i] < 16) Serial.print("0");
+    Serial.print(deviceAddress[i], HEX);
+  }
+}
+
+//////////////////////////////////////////////////////////
+// function to print the power to serial port
+void printPowerSerial(float flowRate,float T1,float T2,float curPower) {
+  Serial.print("FlowRate (kg/s): ");
+  Serial.print(flowRate);
+  Serial.print(", Temps: ");
+  Serial.print(T1);
+  Serial.print(", ");
+  Serial.println(T2);
+  Serial.print("Power: ");
+  Serial.print(curPower);
+  Serial.println(" kW");
+}
+
+/////////////////////////////////////////////////////////////
+// function to print the power to LCD Display
+void printPowerLCD(float flowRate,float T1,float T2,float curPower) {
+  lcd.print("FlowRate (kg/s): ");
+  lcd.print(flowRate);
+  lcd.print(", Temps: ");
+  lcd.print(T1);
+  lcd.print(", ");
+  lcd.println(T2);
+  lcd.print("Power: ");
+  lcd.print(curPower);
+  lcd.println(" kW");
+}
+
+////////////////////////////////////////////////////////
+// Return the load factor of the ac device attached to
+// input pin AC_VOLTS_PIN, assuming the load is determined
+// by chopping the ac wave form.
+// works by collecting NSAMPLES samples of the instantaneous 
+// voltage of the pin, and determining the proportion of the 
+// samples that are approximately zero volts.
+//
+float getLoadFactor(void) {
+  int n;
+  int val;
+  int nLowSamples = 0;
+  float total = 0.0;
+  float mean;
+  float loadFactor;
+  for (n=0;n<NSAMPLES;n++) {
+    val  = analogRead(AC_VOLTS_PIN);
+    total +=val;
+    if (val<5) nLowSamples++;
+  }
+  mean = total/NSAMPLES;
+  loadFactor = 1.0* (NSAMPLES-nLowSamples) / NSAMPLES;
+  Serial.println("getLoadFactor");
+  Serial.print("mean=");
+  Serial.print(mean);
+  Serial.println(".");
+  Serial.print("nLowSamples=");
+  Serial.print(nLowSamples);
+  Serial.println(".");
+  return(loadFactor);
+}
+
+
+//////////////////////////////////////////////////////////////
 void setup(void)
 {
   // start serial port
@@ -107,93 +193,61 @@ void setup(void)
 
 }
 
-// function to print the temperature for a device
-void printTemperature(DeviceAddress deviceAddress)
-{
-  // method 1 - slower
-  //Serial.print("Temp C: ");
-  //Serial.print(sensors.getTempC(deviceAddress));
-  //Serial.print(" Temp F: ");
-  //Serial.print(sensors.getTempF(deviceAddress)); // Makes a second call to getTempC and then converts to Fahrenheit
-
-  // method 2 - faster
-  float tempC = sensors.getTempC(deviceAddress);
-  Serial.print("Temp C: ");
-  Serial.println(tempC);
-}
-
-
-float getLoadFactor(void) {
-  int n;
-  int val;
-  int nLowSamples = 0;
-  float total = 0.0;
-  float mean;
-  float loadFactor;
-  for (n=0;n<NSAMPLES;n++) {
-    val  = analogRead(acVoltsPin);
-    total +=val;
-    if (val<5) nLowSamples++;
-  }
-  mean = total/NSAMPLES;
-  loadFactor = 1.0* (NSAMPLES-nLowSamples) / NSAMPLES;
-  Serial.println("getLoadFactor");
-  Serial.print("mean=");
-  Serial.print(mean);
-  Serial.println(".");
-  Serial.print("nLowSamples=");
-  Serial.print(nLowSamples);
-  Serial.println(".");
-  return(loadFactor);
-}
-
-
-
-
-
+/////////////////////////////////////////////////////////////////
 void loop(void)
 { 
   float loadFactor;
-  // call sensors.requestTemperatures() to issue a global temperature 
-  // request to all devices on the bus
+  float T1,T2;
+  float flowRate;
+  float curPower;
+
+  // Variables for tracking hourly and daily averages
+  unsigned long hourStartMillis;
+  unsigned long dayStartMillis;
+  float hourPowerTotal;
+  float prevHourPowerMean;
+  float dayPowerTotal;
+  float prevDayPowerMean;
+  int hourCount;
+  int dayCount;
+  // Initialise daily and hourly average calculations.
+  dayCount = 0;
+  dayPowerTotal = 0;
+  prevDayPowerMean = 0;
+  hourCount = 0;
+  hourPowerTotal = 0;
+  prevHourPowerMean = 0.;  
+  hourStartMillis = millis();
+  dayStartMillis = hourStartMillis;
 
   lcd.setCursor(0,1);
   lcd.print(millis()/1000);
-  Serial.print("Requesting temperatures...");
   sensors.requestTemperatures(); // Send the command to get temperatures
-  Serial.println("DONE");
-
-
-  // Loop through each device, print out temperature data
-  for(int i=0;i<numberOfDevices; i++)
-  {
-    // Search the wire for address
-    if(sensors.getAddress(tempDeviceAddress, i))
-    {
-      // Output the device ID
-      Serial.print("Temperature for device: ");
-      Serial.print(i,DEC);
-      Serial.print(" - ");
-
-      // It responds almost immediately. Let's print out the data
-      printTemperature(tempDeviceAddress); // Use a simple function to print out the data
-    } 
-    //else ghost device! Check your power requirements and cabling
-
-  }
+  T1 = sensors.getTempC(t1Address);
+  T2 = sensors.getTempC(t2Address);
   loadFactor = getLoadFactor();
-  Serial.print("Load Factor = ");
-  Serial.println(loadFactor);
+  flowRate = loadFactor * M_CAL;
+  curPower = flowRate * CP * (T2-T1);
+  
+  printPowerSerial(flowRate,T1,T2,curPower);
+  printPowerLCD(flowRate,T1,T2,curPower);
+
+  hourPowerTotal += curPower;
+  dayPowerTotal += curPower;
+  hourCount++;
+  dayCount++;
+  
+  if ((millis() - hourStartMillis) > HOUR_MILLIS) {
+    prevHourPowerMean = hourPowerTotal / hourCount;
+    hourPowerTotal = 0.;
+    hourCount = 0;
+  }
+  if ((millis() - dayStartMillis) > DAY_MILLIS) {
+    prevDayPowerMean = dayPowerTotal / dayCount;
+    dayPowerTotal = 0.;
+    dayCount = 0;
+  }
   delay(1000);
 }
 
-// function to print a device address
-void printAddress(DeviceAddress deviceAddress)
-{
-  for (uint8_t i = 0; i < 8; i++)
-  {
-    if (deviceAddress[i] < 16) Serial.print("0");
-    Serial.print(deviceAddress[i], HEX);
-  }
-}
 
