@@ -237,15 +237,23 @@ void loop(void)
   hourCount++;
   dayCount++;
   
+  // Check to see if an hour has elapsed
   if ((millis() - hourStartMillis) > HOUR_MILLIS) {
     prevHourPowerMean = hourPowerTotal / hourCount;
     hourPowerTotal = 0.;
     hourCount = 0;
+    hourStartMillis = millis();
+    
+    // TODO - write hourly average to SD Card
   }
+  // Check to see if a day has elapsed.
   if ((millis() - dayStartMillis) > DAY_MILLIS) {
     prevDayPowerMean = dayPowerTotal / dayCount;
     dayPowerTotal = 0.;
     dayCount = 0;
+    dayStartMillis = millis();
+    
+   // TODO - write daily average to SD Card
   }
   delay(1000);
 }
