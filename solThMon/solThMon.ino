@@ -23,6 +23,16 @@
  * is the mass flow rate (kg/s) and T1 and T2 are the collector
  * inlet and outlet temperatures respectively (K or degC).
  *
+ * LCD Connections are as follows:
+ * Function  LCD Pin  Arduino Pin
+ * RS        4        12
+ * RW        5        11
+ * E         6        10
+ * D4        11        3
+ * D5        12        4
+ * D6        13        5
+ * D7        14        6
+ *
  * Copyright Graham Jones, 2012
  *
  */
@@ -32,15 +42,15 @@
 
 // Data wire is plugged into port 2 on the Arduino
 #define ONE_WIRE_BUS 2
-#define LCD_PINS 12,11,10,6,5,4,3  // LiqudCrystal Pins
+#define LCD_PINS 12,11,10,3,4,5,6  // LiqudCrystal Pins
 #define TEMPERATURE_PRECISION 9
 #define NSAMPLES 10000     // Number of analog samples to collect for
                            // load factor calculation.
 #define AC_VOLTS_PIN A0      // Pin connected to AC voltage signal.
 // OneWire address of the collector inlet temp sensor
-#define T1_ADDRESS {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00}
+#define T1_ADDRESS {0x28,0x60,0xcf,0x4a,0x04,0x00,0x00,0xf5}
 // OneWire address of the collector outlet temp sensor
-#define T2_ADDRESS {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00}
+#define T2_ADDRESS {0x28,0x96,0xe3,0x4a,0x04,0x00,0x00,0xec}
 
 #define CP 4200    // Specific Heat Capacity of water J/kg/K
 #define M_CAL 0.1  // water flow rate at 100% load factor (kg/s).
@@ -90,6 +100,8 @@ void printPowerSerial(float flowRate,float T1,float T2,float curPower) {
 /////////////////////////////////////////////////////////////
 // function to print the power to LCD Display
 void printPowerLCD(float flowRate,float T1,float T2,float curPower) {
+  //lcd.setCursor(0,1);
+  //lcd.print(millis()/1000);
   lcd.print("FlowRate (kg/s): ");
   lcd.print(flowRate);
   lcd.print(", Temps: ");
@@ -139,20 +151,18 @@ void setup(void)
 {
   // start serial port
   Serial.begin(9600);
-  Serial.println("Dallas Temperature IC Control Library Demo");
+  Serial.println("SolThMon - Solar Thermal Power Monitor");
 
   lcd.begin(16,2);
   lcd.print("hello World!!");
 
-  // Start up the library
+  // Start up the temperature measurement library
   sensors.begin();
 
-  // Grab a count of devices on the wire
+  // Grab a count of temperature devices on the one-wire bus.
   numberOfDevices = sensors.getDeviceCount();
 
   // locate devices on the bus
-  Serial.print("Locating devices...");
-
   Serial.print("Found ");
   Serial.print(numberOfDevices, DEC);
   Serial.println(" devices.");
@@ -190,12 +200,14 @@ void setup(void)
       Serial.print(" but could not detect address. Check power and cabling");
     }
   }
-
+  // TODO - check that the specified devices for T1 and T2 are
+  // actually present on the 1 wire bus - print error if not.
 }
 
 /////////////////////////////////////////////////////////////////
 void loop(void)
 { 
+  // Variables for power calculation.
   float loadFactor;
   float T1,T2;
   float flowRate;
@@ -220,8 +232,6 @@ void loop(void)
   hourStartMillis = millis();
   dayStartMillis = hourStartMillis;
 
-  lcd.setCursor(0,1);
-  lcd.print(millis()/1000);
   sensors.requestTemperatures(); // Send the command to get temperatures
   T1 = sensors.getTempC(t1Address);
   T2 = sensors.getTempC(t2Address);
