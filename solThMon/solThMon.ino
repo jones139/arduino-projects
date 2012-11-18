@@ -38,12 +38,14 @@
 // load factor calculation.
 #define AC_VOLTS_PIN A0      // Pin connected to AC voltage signal.
 // OneWire address of the collector inlet temp sensor
-#define T1_ADDRESS {0x28,0x60,0xcf,0x4a,0x04,0x00,0x00,0xf5}
+//#define T1_ADDRESS {0x28,0x60,0xcf,0x4a,0x04,0x00,0x00,0xf5}
+#define T2_ADDRESS {0x28,0x85,0xad,0x4a,0x04,0x00,0x00,0xa5}
 // OneWire address of the collector outlet temp sensor
-#define T2_ADDRESS {0x28,0x96,0xe3,0x4a,0x04,0x00,0x00,0xec}
+//#define T2_ADDRESS {0x28,0x96,0xe3,0x4a,0x04,0x00,0x00,0xec}
+#define T1_ADDRESS {0x28,0x7b,0x10,0x4b,0x04,0x00,0x00,0xe8}
 
 #define CP 4200    // Specific Heat Capacity of water J/kg/K
-#define M_CAL 0.1  // water flow rate at 100% load factor (kg/s).
+#define M_CAL 5.7  // water flow rate at 100% load factor (l/min).
 
 #define SAMPLE_MILLIS 10000   // Period between samples (miliseconds).
 #define HOUR_MILLIS 3600000  // number of miliseconds in an hour.
@@ -91,7 +93,9 @@ void printAddress(DeviceAddress deviceAddress)
 
 //////////////////////////////////////////////////////////
 // function to print the power to serial port
-void printPowerSerial(float flowRate,float T1,float T2,float curPower) {
+void printPowerSerial(float loadFactor,float flowRate,float T1,float T2,float curPower) {
+  Serial.print("Load Factor: ");
+  Serial.print(loadFactor);
   Serial.print("FlowRate (kg/s): ");
   Serial.print(flowRate);
   Serial.print(", Temps: ");
@@ -100,7 +104,7 @@ void printPowerSerial(float flowRate,float T1,float T2,float curPower) {
   Serial.println(T2);
   Serial.print("Power: ");
   Serial.print(curPower);
-  Serial.println(" kW");
+  Serial.println(" W");
 }
 
 
@@ -137,6 +141,18 @@ float getLoadFactor(void) {
   return(loadFactor);
 }
 
+
+float getLoadFactor2(void) {
+  int val;
+  float loadFactor;
+  
+  val = analogRead(AC_VOLTS_PIN);
+  loadFactor = val * 0.3 / 480.;
+  Serial.print("loadFactor=");
+  Serial.print(loadFactor);
+  Serial.println(".");
+  return(loadFactor);
+}
 
 //////////////////////////////////////////////////////////////
 void setup(void)
@@ -229,11 +245,11 @@ void loop(void)
     T1 = sensors.getTempC(t1Address);
     T2 = sensors.getTempC(t2Address);
     Serial.println("Getting Load Factor...");
-    loadFactor = getLoadFactor();
-    flowRate = loadFactor * M_CAL;
+    loadFactor = getLoadFactor2();
+    flowRate = loadFactor * M_CAL / 60.0;
     curPower = flowRate * CP * (T2-T1);
 
-    printPowerSerial(flowRate,T1,T2,curPower);
+    printPowerSerial(loadFactor,flowRate,T1,T2,curPower);
 
     hourPowerTotal += curPower;
     dayPowerTotal += curPower;
