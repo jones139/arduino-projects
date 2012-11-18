@@ -29,27 +29,9 @@
  */
 #include <OneWire.h>
 #include <DallasTemperature.h>
-
-// Data wire is plugged into port 2 on the Arduino
-#define ONE_WIRE_BUS 13
-#define SWITCH_PIN 12    // the digital pin used for the display switch
-#define TEMPERATURE_PRECISION 9
-#define NSAMPLES 1000     // Number of analog samples to collect for
-// load factor calculation.
-#define AC_VOLTS_PIN A0      // Pin connected to AC voltage signal.
-// OneWire address of the collector inlet temp sensor
-//#define T1_ADDRESS {0x28,0x60,0xcf,0x4a,0x04,0x00,0x00,0xf5}
-#define T2_ADDRESS {0x28,0x85,0xad,0x4a,0x04,0x00,0x00,0xa5}
-// OneWire address of the collector outlet temp sensor
-//#define T2_ADDRESS {0x28,0x96,0xe3,0x4a,0x04,0x00,0x00,0xec}
-#define T1_ADDRESS {0x28,0x7b,0x10,0x4b,0x04,0x00,0x00,0xe8}
-
-#define CP 4200    // Specific Heat Capacity of water J/kg/K
-#define M_CAL 5.7  // water flow rate at 100% load factor (l/min).
-
-#define SAMPLE_MILLIS 10000   // Period between samples (miliseconds).
-#define HOUR_MILLIS 3600000  // number of miliseconds in an hour.
-#define DAY_MILLIS 86400000  // number of miliseconds in a day.
+#include "config.h"
+#include "ledDriver.h"
+#include "pumpSpeed.h"
 
 // Variables for tracking timers
 unsigned long sampleStartMillis;
@@ -81,7 +63,12 @@ DeviceAddress t2Address = T2_ADDRESS;
 unsigned long int timer = 0;
 
 
-// function to print a device address
+///////////////////////////////////////////////////////////////////////////
+// NAME: printAddress
+// DESC: Writes the oneWire DeviceAddress provided on the command line to
+//       the serial port in hexadecemal.
+// HIST: Borrowed from oneWire example code.
+//
 void printAddress(DeviceAddress deviceAddress)
 {
   for (uint8_t i = 0; i < 8; i++)
@@ -91,12 +78,20 @@ void printAddress(DeviceAddress deviceAddress)
   }
 }
 
-//////////////////////////////////////////////////////////
-// function to print the power to serial port
-void printPowerSerial(float loadFactor,float flowRate,float T1,float T2,float curPower) {
-  Serial.print("Load Factor: ");
-  Serial.print(loadFactor);
-  Serial.print("FlowRate (kg/s): ");
+boolean cmpDeviceAddress(DeviceAddress add1, DeviceAddress add2) {
+   return TRUE; 
+}
+
+////////////////////////////////////////////////////////////////////////////////////////
+// NAME: printPowerSerial
+// DESC: Writes out details of the power calculation to the serial port.
+//       Uses only the parameters provided to the function, not global variables.
+// HIST: 13 November 2012   GJ  ORIGINAL VERSION
+//
+void printPowerSerial(float pumpSpeed,float flowRate,float T1,float T2,float curPower) {
+  Serial.print("PumpSpeed (%): ");
+  Serial.print(pumpSpeed);
+  Serial.print(", FlowRate (kg/s): ");
   Serial.print(flowRate);
   Serial.print(", Temps: ");
   Serial.print(T1);
@@ -108,55 +103,12 @@ void printPowerSerial(float loadFactor,float flowRate,float T1,float T2,float cu
 }
 
 
-////////////////////////////////////////////////////////
-// Return the load factor of the ac device attached to
-// input pin AC_VOLTS_PIN, assuming the load is determined
-// by chopping the ac wave form.
-// works by collecting NSAMPLES samples of the instantaneous 
-// voltage of the pin, and determining the proportion of the 
-// samples that are approximately zero volts.
-//
-float getLoadFactor(void) {
-  int n;
-  int val;
-  int nLowSamples = 0;
-  float total = 0.0;
-  float mean;
-  float loadFactor;
-  for (n=0;n<NSAMPLES;n++) {
-    val  = analogRead(AC_VOLTS_PIN);
-    total +=val;
-    if (val<5) nLowSamples++;
-    //serviceLED();
-  }
-  mean = total/NSAMPLES;
-  loadFactor = 1.0* (NSAMPLES-nLowSamples) / NSAMPLES;
-  Serial.println("getLoadFactor");
-  Serial.print("mean=");
-  Serial.print(mean);
-  Serial.println(".");
-  Serial.print("nLowSamples=");
-  Serial.print(nLowSamples);
-  Serial.println(".");
-  return(loadFactor);
-}
-
-
-float getLoadFactor2(void) {
-  int val;
-  float loadFactor;
-  
-  val = analogRead(AC_VOLTS_PIN);
-  loadFactor = val * 0.3 / 480.;
-  Serial.print("loadFactor=");
-  Serial.print(loadFactor);
-  Serial.println(".");
-  return(loadFactor);
-}
 
 //////////////////////////////////////////////////////////////
 void setup(void)
 {
+  boolean foundT2 = FALSE;
+  boolean foundT1 = FALSE;
   // start serial port
   Serial.begin(9600);
   Serial.println("SolThMon - Solar Thermal Power Monitor");
@@ -181,7 +133,8 @@ void setup(void)
   if (sensors.isParasitePowerMode()) Serial.println("ON");
   else Serial.println("OFF");
 
-  // Loop through each device, print out address
+  // Loop through each device, print out address - we need this so we can find the 
+  //   address of a new temperature sensor if we replace one.
   for(int i=0;i<numberOfDevices; i++)
   {
     // Search the wire for address
@@ -209,8 +162,31 @@ void setup(void)
       Serial.print(" but could not detect address. Check power and cabling");
     }
   }
-  // TODO - check that the specified devices for T1 and T2 are
-  // actually present on the 1 wire bus - print error if not.
+
+  for(int i=0;i<numberOfDevices; i++)
+  {
+    // Search the wire for address
+    if(sensors.getAddress(tempDeviceAddress, i)) { 
+      if (cmpDeviceAddress(tempDeviceAddress,(DeviceAddress)T1_ADDRESS)) {
+        Serial.println("Found T1 Sensor");
+        foundT1 = TRUE;
+      }
+      if (cmpDeviceAddress(tempDeviceAddress,(DeviceAddress)T2_ADDRESS)) {
+        Serial.println("Found T2 Sensor");
+        foundT2 = TRUE;
+      }
+    }
+  }
+  if (!foundT1) {
+    Serial.print("**** ERROR - Failed to Find T1 Sensor at address ");
+    printAddress((DeviceAddress)T2_ADDRESS);
+    Serial.println(" *****");
+  }
+  if (!foundT2) {
+    Serial.print("**** ERROR - Failed to Find T2 Sensor at address ");
+    printAddress((DeviceAddress)T1_ADDRESS);
+    Serial.println(" *****");
+  }
 
   timer = millis();
   sampleStartMillis = millis();
@@ -231,7 +207,7 @@ void setup(void)
 void loop(void)
 { 
   // Variables for power calculation.
-  float loadFactor;
+  float pumpSpeed;
   float T1,T2;
   float flowRate;
   float curPower;
@@ -245,11 +221,11 @@ void loop(void)
     T1 = sensors.getTempC(t1Address);
     T2 = sensors.getTempC(t2Address);
     Serial.println("Getting Load Factor...");
-    loadFactor = getLoadFactor2();
-    flowRate = loadFactor * M_CAL / 60.0;
+    pumpSpeed = getPumpSpeed();
+    flowRate = pumpSpeed * M_CAL / 60.0;
     curPower = flowRate * CP * (T2-T1);
 
-    printPowerSerial(loadFactor,flowRate,T1,T2,curPower);
+    printPowerSerial(pumpSpeed,flowRate,T1,T2,curPower);
 
     hourPowerTotal += curPower;
     dayPowerTotal += curPower;

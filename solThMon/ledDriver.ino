@@ -1,4 +1,4 @@
-/* FTL-655S LED Display */
+/* Code to drive a FTL-655S LED Display */
 
 /*
  * Defines which segments to illuminate for each number
@@ -34,22 +34,9 @@ volatile unsigned char seg2displayIp[3][7] = {
  {13,10,12,12, 9,13,10} 
 };
 
-volatile unsigned char displayIp2pin[30] = {
-  0,        // 0 not used
-  0,0,      // 1-2
-  0,0,0,0,  // 3-6
-  0,0,0,0,  // 7-10
-  0,0,0, // 11-13
-  9,8,7,6,  // 14-17
-  5,4,3,2   // 18-21
-};
+volatile unsigned char displayIp2pin[30] = DISPLAY_IP_2_PIN;
 
-volatile unsigned char cathNo2pin[2] = {
-  10,9
-};
-
-
-
+volatile unsigned char cathNo2pin[2] = CATH_NO_2_PIN;
 
 int val1 = 0;    // Value of digit 1.
 int val2 = 0;    // Value of digit 2.
@@ -124,6 +111,5 @@ void ledInit() {
   }
 
 }
-
 
 
