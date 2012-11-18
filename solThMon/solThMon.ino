@@ -23,29 +23,19 @@
  * is the mass flow rate (kg/s) and T1 and T2 are the collector
  * inlet and outlet temperatures respectively (K or degC).
  *
- * LCD Connections are as follows:
- * Function  LCD Pin  Arduino Pin
- * RS        4        12
- * RW        5        11
- * E         6        10
- * D4        11        3
- * D5        12        4
- * D6        13        5
- * D7        14        6
  *
  * Copyright Graham Jones, 2012
  *
  */
 #include <OneWire.h>
 #include <DallasTemperature.h>
-#include <LiquidCrystal.h>
 
 // Data wire is plugged into port 2 on the Arduino
-#define ONE_WIRE_BUS 2
-#define LCD_PINS 12,11,10,3,4,5,6  // LiqudCrystal Pins
+#define ONE_WIRE_BUS 13
+#define SWITCH_PIN 12    // the digital pin used for the display switch
 #define TEMPERATURE_PRECISION 9
-#define NSAMPLES 10000     // Number of analog samples to collect for
-                           // load factor calculation.
+#define NSAMPLES 1000     // Number of analog samples to collect for
+// load factor calculation.
 #define AC_VOLTS_PIN A0      // Pin connected to AC voltage signal.
 // OneWire address of the collector inlet temp sensor
 #define T1_ADDRESS {0x28,0x60,0xcf,0x4a,0x04,0x00,0x00,0xf5}
@@ -55,14 +45,28 @@
 #define CP 4200    // Specific Heat Capacity of water J/kg/K
 #define M_CAL 0.1  // water flow rate at 100% load factor (kg/s).
 
+#define SAMPLE_MILLIS 10000   // Period between samples (miliseconds).
 #define HOUR_MILLIS 3600000  // number of miliseconds in an hour.
 #define DAY_MILLIS 86400000  // number of miliseconds in a day.
 
+// Variables for tracking timers
+unsigned long sampleStartMillis;
+unsigned long hourStartMillis;
+unsigned long dayStartMillis;
 
-// Initialise Liqud Crystal Display and oneWire bus 
+// Variables for daily and hourly average calculations.
+int hourCount;
+int dayCount;
+float hourPowerTotal;
+float dayPowerTotal;
+float prevHourPowerMean;
+float prevDayPowerMean;
+  int ival1,ival2;
+
+
+// Initialise oneWire bus 
 // with DallasTemperature library, which is used
 // for temperature measurement.
-LiquidCrystal lcd(LCD_PINS);
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
 
@@ -71,6 +75,8 @@ int numberOfDevices; // Number of temperature devices found
 DeviceAddress tempDeviceAddress; // We'll use this variable to store a found device address
 DeviceAddress t1Address = T1_ADDRESS;
 DeviceAddress t2Address = T2_ADDRESS;
+
+unsigned long int timer = 0;
 
 
 // function to print a device address
@@ -97,21 +103,6 @@ void printPowerSerial(float flowRate,float T1,float T2,float curPower) {
   Serial.println(" kW");
 }
 
-/////////////////////////////////////////////////////////////
-// function to print the power to LCD Display
-void printPowerLCD(float flowRate,float T1,float T2,float curPower) {
-  //lcd.setCursor(0,1);
-  //lcd.print(millis()/1000);
-  lcd.print("FlowRate (kg/s): ");
-  lcd.print(flowRate);
-  lcd.print(", Temps: ");
-  lcd.print(T1);
-  lcd.print(", ");
-  lcd.println(T2);
-  lcd.print("Power: ");
-  lcd.print(curPower);
-  lcd.println(" kW");
-}
 
 ////////////////////////////////////////////////////////
 // Return the load factor of the ac device attached to
@@ -132,6 +123,7 @@ float getLoadFactor(void) {
     val  = analogRead(AC_VOLTS_PIN);
     total +=val;
     if (val<5) nLowSamples++;
+    //serviceLED();
   }
   mean = total/NSAMPLES;
   loadFactor = 1.0* (NSAMPLES-nLowSamples) / NSAMPLES;
@@ -153,8 +145,9 @@ void setup(void)
   Serial.begin(9600);
   Serial.println("SolThMon - Solar Thermal Power Monitor");
 
-  lcd.begin(16,2);
-  lcd.print("hello World!!");
+  ledInit();
+  pinMode(SWITCH_PIN, INPUT);
+  digitalWrite(SWITCH_PIN, HIGH);
 
   // Start up the temperature measurement library
   sensors.begin();
@@ -202,6 +195,20 @@ void setup(void)
   }
   // TODO - check that the specified devices for T1 and T2 are
   // actually present on the 1 wire bus - print error if not.
+
+  timer = millis();
+  sampleStartMillis = millis();
+  hourStartMillis = sampleStartMillis;
+  dayStartMillis = hourStartMillis;
+
+  // Initialise daily and hourly average calculations.
+  dayCount = 0;
+  dayPowerTotal = 0;
+  hourCount = 0;
+  hourPowerTotal = 0;
+  prevDayPowerMean = 0;
+  prevHourPowerMean = 0.;  
+
 }
 
 /////////////////////////////////////////////////////////////////
@@ -213,59 +220,69 @@ void loop(void)
   float flowRate;
   float curPower;
 
-  // Variables for tracking hourly and daily averages
-  unsigned long hourStartMillis;
-  unsigned long dayStartMillis;
-  float hourPowerTotal;
-  float prevHourPowerMean;
-  float dayPowerTotal;
-  float prevDayPowerMean;
-  int hourCount;
-  int dayCount;
-  // Initialise daily and hourly average calculations.
-  dayCount = 0;
-  dayPowerTotal = 0;
-  prevDayPowerMean = 0;
-  hourCount = 0;
-  hourPowerTotal = 0;
-  prevHourPowerMean = 0.;  
-  hourStartMillis = millis();
-  dayStartMillis = hourStartMillis;
+  if ((millis() - sampleStartMillis) > SAMPLE_MILLIS) {
+    Serial.println("sample...");
+    sampleStartMillis = millis();
 
-  sensors.requestTemperatures(); // Send the command to get temperatures
-  T1 = sensors.getTempC(t1Address);
-  T2 = sensors.getTempC(t2Address);
-  loadFactor = getLoadFactor();
-  flowRate = loadFactor * M_CAL;
-  curPower = flowRate * CP * (T2-T1);
-  
-  printPowerSerial(flowRate,T1,T2,curPower);
-  printPowerLCD(flowRate,T1,T2,curPower);
+    Serial.println("Getting temperatures..");
+    sensors.requestTemperatures(); // Send the command to get temperatures
+    T1 = sensors.getTempC(t1Address);
+    T2 = sensors.getTempC(t2Address);
+    Serial.println("Getting Load Factor...");
+    loadFactor = getLoadFactor();
+    flowRate = loadFactor * M_CAL;
+    curPower = flowRate * CP * (T2-T1);
 
-  hourPowerTotal += curPower;
-  dayPowerTotal += curPower;
-  hourCount++;
-  dayCount++;
+    printPowerSerial(flowRate,T1,T2,curPower);
+
+    hourPowerTotal += curPower;
+    dayPowerTotal += curPower;
+    hourCount++;
+    dayCount++;
+
+    // Check to see if an hour has elapsed
+    if ((millis() - hourStartMillis) > HOUR_MILLIS) {
+      prevHourPowerMean = hourPowerTotal / hourCount;
+      hourPowerTotal = 0.;
+      hourCount = 0;
+      hourStartMillis = millis();
+
+      // TODO - write hourly average to SD Card
+    }
+    // Check to see if a day has elapsed.
+    if ((millis() - dayStartMillis) > DAY_MILLIS) {
+      prevDayPowerMean = dayPowerTotal / dayCount;
+      dayPowerTotal = 0.;
+      dayCount = 0;
+      dayStartMillis = millis();
+
+      // TODO - write daily average to SD Card
+    }
+    ival2 = (int)(curPower / 1000);
+    ival1 = (int)((curPower - 1000*ival2)/100);
+/*    if (millis()-timer>=1000) {
+      Serial.println("second timer");
+      timer = millis();
+      ival1++;
+      if (ival1>9) {
+        ival1=0; 
+        ival2++;
+      }
+      if (ival2>9) {
+        ival2=0;
+      }
+      
+    }
+*/
+    setLEDVals(ival1,ival2);
+  }
   
-  // Check to see if an hour has elapsed
-  if ((millis() - hourStartMillis) > HOUR_MILLIS) {
-    prevHourPowerMean = hourPowerTotal / hourCount;
-    hourPowerTotal = 0.;
-    hourCount = 0;
-    hourStartMillis = millis();
-    
-    // TODO - write hourly average to SD Card
-  }
-  // Check to see if a day has elapsed.
-  if ((millis() - dayStartMillis) > DAY_MILLIS) {
-    prevDayPowerMean = dayPowerTotal / dayCount;
-    dayPowerTotal = 0.;
-    dayCount = 0;
-    dayStartMillis = millis();
-    
-   // TODO - write daily average to SD Card
-  }
-  delay(1000);
+  // Only service the display if the switch is pressed, to save power.
+  if(digitalRead(SWITCH_PIN)==LOW)
+    serviceLED();
+  //delay(1000);
 }
+
+
 
 

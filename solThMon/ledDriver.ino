@@ -55,7 +55,6 @@ int val1 = 0;    // Value of digit 1.
 int val2 = 0;    // Value of digit 2.
 int val3 = 0;    // Value of digit 3.
 int val4 = 0;    // Value of digit 4.
-unsigned long int timer;
 
 
 /* Show Digit */
@@ -92,17 +91,23 @@ void showDigit(int digit, int val) {
   
 }
 
+void setLEDVals(int ival1, int ival2) { 
+  Serial.println("setLEDVals");
+  val1 = ival1;
+  val2 = ival2;
+}
+
 void serviceLED() {
+  //Serial.println("serviceLED");
    showDigit(0,val1); 
    showDigit(1,val2);
 //   showDigit(1,val2);
 }
 
 
-void setup() {
+void ledInit() {
   int i;
-  Serial.begin(9600);
-  Serial.println("LED Test");
+  Serial.println("LED Init");
 
   for (i=0;i<sizeof(displayIp2pin);i++) {
     Serial.print("Setting Pin "); 
@@ -118,36 +123,7 @@ void setup() {
     pinMode(cathNo2pin[i],OUTPUT);
   }
 
-  timer = millis();
-  val1=0;
 }
-
-
-void loop() {
-   serviceLED();
-  
-   //showDigit(0,val1);
-  
-   if (millis()-timer>=1000) {
-      timer = millis();
-      val1++;
-      if (val1>9) {
-        val1=0; 
-        val2++;
-      }
-      if (val2>9) {
-        val2=0;
-      }
-   }
-  
-//    for (val=0;val<=9;val++) {
-//      Serial.print("val= ");
-//      Serial.println(val);
-//       displayVal(1,val);  
-//       delay(1000);  
-//    } 
-}
-
 
 
 
