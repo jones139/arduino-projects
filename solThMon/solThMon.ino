@@ -219,6 +219,8 @@ void setup(void)
   prevDayPowerMean = 0;
   prevHourPowerMean = 0.;  
 
+  showLEDChangeAnim(1000);
+
 }
 
 /////////////////////////////////////////////////////////////////
@@ -287,7 +289,7 @@ void loop(void)
     }
     if ((switchTimeVal > CUR_POW_MILLIS) && (displayMode == 0)) {
       Serial.print("Showing Power - ");
-      curPower = 1200;
+      //curPower = 1200;
       Serial.println(curPower/100);
       setLEDVal((int)(curPower/100));
       showDisplay = TRUE;
@@ -295,7 +297,10 @@ void loop(void)
     }
     if ((switchTimeVal > FLOW_MILLIS) && (displayMode == 1)) {
       Serial.print("Showing Flow - ");
-      pumpSpeed = 0.30;
+      //pumpSpeed = 0.30;
+      setLEDVals(17,17);
+      serviceLED();
+      showLEDChangeAnim(200);
       Serial.println(pumpSpeed*100);
       setLEDVal((int)(pumpSpeed * 100));
       showDisplay = TRUE;
@@ -303,7 +308,10 @@ void loop(void)
     }
     if ((switchTimeVal > T1_MILLIS) && (displayMode == 2)) {
       Serial.print("Showing T1 ");
-      T1 = 25;
+      //T1 = 25;
+      setLEDVals(17,17);
+      serviceLED();
+      showLEDChangeAnim(200);
       Serial.println(T1);
       setLEDVal((int)(T1));
       showDisplay = TRUE;
@@ -311,7 +319,10 @@ void loop(void)
     }
     if ((switchTimeVal > T2_MILLIS) && (displayMode == 3)) {
       Serial.print("Showing T2 ");
-      T2 = 35;
+      //T2 = 35;
+      showLEDChangeAnim(200);
+      setLEDVals(17,17);
+      serviceLED();
       Serial.println(T2);
       setLEDVal((int)(T2));
       showDisplay = TRUE;

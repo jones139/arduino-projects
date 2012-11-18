@@ -14,7 +14,15 @@ volatile unsigned char num2segs[]= {
   0b01111101,  // 6
   0b00000111,  // 7 
   0b01111111,  // 8
-  0b01101111   // 9
+  0b01101111,  // 9
+  0b01000000,  // A
+  0b01000000,  // b
+  0b01000000,  // c
+  0b01000000,  // d
+  0b01000000,  // E
+  0b01000000,  // F
+  0b01000000,  // -
+  0b01001001   // 3 bars
 };
 
 // 1st dimension is digit number (0-2), 2nd is segment a-g
@@ -78,10 +86,25 @@ void showDigit(int digit, int val) {
   
 }
 
+void showLEDChangeAnim(long int duration) {
+  long int tStart;
+  Serial.println("showLEDChangeAnim");
+  setLEDVals(16,16);
+  tStart = millis();
+  while((millis()-tStart) < duration)
+    serviceLED();
+}
+
 void setLEDVals(int ival1, int ival2) { 
   //Serial.println("setLEDVals");
-  val1 = ival1;
-  val2 = ival2;
+  if (ival1 < sizeof(num2segs)) 
+    val1 = ival1;
+  else
+    val1 = sizeof(num2segs)-1;    
+  if (ival2 < sizeof(num2segs))
+    val2 = ival2;
+  else
+    val2 = sizeof(num2segs)-1;
 }
 
 void setLEDVal(int val) {
