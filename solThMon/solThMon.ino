@@ -45,7 +45,7 @@ float hourPowerTotal;
 float dayPowerTotal;
 float prevHourPowerMean;
 float prevDayPowerMean;
-  int ival1,ival2;
+int ival1,ival2;
 
 
 // Initialise oneWire bus 
@@ -79,8 +79,28 @@ void printAddress(DeviceAddress deviceAddress)
 }
 
 boolean cmpDeviceAddress(DeviceAddress add1, DeviceAddress add2) {
-   return TRUE; 
+  boolean retVal = TRUE;
+  int i;
+  for (i=0;i<8;i++)
+    if (add1[i]!=add2[i]) retVal = FALSE; 
+  return retVal; 
 }
+
+long switchTime() {
+  static unsigned long startTime = 0;
+  static boolean state,curState;
+  curState = digitalRead(SWITCH_PIN);
+  if (curState != state) {
+    state = curState;
+    startTime = millis();
+  }
+  if (state==LOW)
+    return (millis() - startTime);
+  else
+    return 0;
+}
+
+
 
 ////////////////////////////////////////////////////////////////////////////////////////
 // NAME: printPowerSerial
@@ -101,8 +121,6 @@ void printPowerSerial(float pumpSpeed,float flowRate,float T1,float T2,float cur
   Serial.print(curPower);
   Serial.println(" W");
 }
-
-
 
 //////////////////////////////////////////////////////////////
 void setup(void)
@@ -211,7 +229,12 @@ void loop(void)
   float T1,T2;
   float flowRate;
   float curPower;
+  long int switchTimeVal;
+  static int displayMode = 0;
+  static long int displayUpdateMillis = 0;
+  static boolean showDisplay = FALSE;
 
+  // Check if it is time to collect a data sample
   if ((millis() - sampleStartMillis) > SAMPLE_MILLIS) {
     Serial.println("sample...");
     sampleStartMillis = millis();
@@ -241,6 +264,7 @@ void loop(void)
 
       // TODO - write hourly average to SD Card
     }
+
     // Check to see if a day has elapsed.
     if ((millis() - dayStartMillis) > DAY_MILLIS) {
       prevDayPowerMean = dayPowerTotal / dayCount;
@@ -250,30 +274,55 @@ void loop(void)
 
       // TODO - write daily average to SD Card
     }
-    ival2 = (int)(curPower / 1000);
-    ival1 = (int)((curPower - 1000*ival2)/100);
-/*    if (millis()-timer>=1000) {
-      Serial.println("second timer");
-      timer = millis();
-      ival1++;
-      if (ival1>9) {
-        ival1=0; 
-        ival2++;
-      }
-      if (ival2>9) {
-        ival2=0;
-      }
-      
-    }
-*/
-    setLEDVals(ival1,ival2);
   }
-  
-  // Only service the display if the switch is pressed, to save power.
-  if(digitalRead(SWITCH_PIN)==LOW)
-    serviceLED();
-  //delay(1000);
+
+  // Check if it is time to update the display values.
+  if ((millis() - displayUpdateMillis) > DISPLAY_UPDATE_MILLIS) {
+    displayUpdateMillis = millis();
+    // Only service the display if the switch is pressed, to save power.
+    switchTimeVal = switchTime();
+    if (switchTimeVal <=CUR_POW_MILLIS) {
+      showDisplay = FALSE;
+      displayMode = 0;
+    }
+    if ((switchTimeVal > CUR_POW_MILLIS) && (displayMode == 0)) {
+      Serial.print("Showing Power - ");
+      curPower = 1200;
+      Serial.println(curPower/100);
+      setLEDVal((int)(curPower/100));
+      showDisplay = TRUE;
+      displayMode = 1;
+    }
+    if ((switchTimeVal > FLOW_MILLIS) && (displayMode == 1)) {
+      Serial.print("Showing Flow - ");
+      pumpSpeed = 0.30;
+      Serial.println(pumpSpeed*100);
+      setLEDVal((int)(pumpSpeed * 100));
+      showDisplay = TRUE;
+      displayMode = 2;
+    }
+    if ((switchTimeVal > T1_MILLIS) && (displayMode == 2)) {
+      Serial.print("Showing T1 ");
+      T1 = 25;
+      Serial.println(T1);
+      setLEDVal((int)(T1));
+      showDisplay = TRUE;
+      displayMode = 3;
+    }
+    if ((switchTimeVal > T2_MILLIS) && (displayMode == 3)) {
+      Serial.print("Showing T2 ");
+      T2 = 35;
+      Serial.println(T2);
+      setLEDVal((int)(T2));
+      showDisplay = TRUE;
+      displayMode = 4;
+    }
+  }
+  if (showDisplay) serviceLED();
+
 }
+
+
 
 
 

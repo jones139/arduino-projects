@@ -79,9 +79,24 @@ void showDigit(int digit, int val) {
 }
 
 void setLEDVals(int ival1, int ival2) { 
-  Serial.println("setLEDVals");
+  //Serial.println("setLEDVals");
   val1 = ival1;
   val2 = ival2;
+}
+
+void setLEDVal(int val) {
+  int ival1,ival2;
+  ival2 = (int)(val / 10);
+  ival1 = (int)((val - 10*ival2));
+  if (ival2>9) ival2=9;
+  if (ival1>9) ival1=9;
+  Serial.print("setLEDVal - val1=");
+  Serial.print(val);
+  Serial.print(" val2=");
+  Serial.print(val2);
+  Serial.print(" val1=");
+  Serial.println(val1);
+  setLEDVals(ival1,ival2);
 }
 
 void serviceLED() {

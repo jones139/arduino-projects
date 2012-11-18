@@ -35,6 +35,12 @@
 #define HOUR_MILLIS 3600000  // number of miliseconds in an hour.
 #define DAY_MILLIS 86400000  // number of miliseconds in a day.
 
+#define DISPLAY_UPDATE_MILLIS 100 // how often to update the display values
+#define CUR_POW_MILLIS 10 // how long to hold switch before displaying current power
+#define FLOW_MILLIS 1000  // how long to hold switch before displaying flow rate
+#define T1_MILLIS   2000  // how long to hold switch before displaying T1
+#define T2_MILLIS   3000  // how long to hold switch before displaying T1
+
 // Define the arduino digital pin numbers that are connected to the
 // FTL-655S LED display pins.  Array values are arduino pin numbers,
 // in the order of FTL-655S display input numbers.
