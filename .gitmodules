@@ -1,0 +1,3 @@
+[submodule "arduino-projects.wiki"]
+	path = arduino-projects.wiki
+	url = git://github.com/jones139/arduino-projects.wiki
