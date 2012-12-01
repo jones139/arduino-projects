@@ -29,9 +29,12 @@
  */
 #include <OneWire.h>
 #include <DallasTemperature.h>
+#include <LiquidCrystal.h>
 #include "config.h"
-#include "ledDriver.h"
 #include "pumpSpeed.h"
+
+// lcd display
+LiquidCrystal lcd(7,6, 5, 4, 3, 2);
 
 // Variables for tracking timers
 unsigned long sampleStartMillis;
@@ -86,21 +89,6 @@ boolean cmpDeviceAddress(DeviceAddress add1, DeviceAddress add2) {
   return retVal; 
 }
 
-long switchTime() {
-  static unsigned long startTime = 0;
-  static boolean state,curState;
-  curState = digitalRead(SWITCH_PIN);
-  if (curState != state) {
-    state = curState;
-    startTime = millis();
-  }
-  if (state==LOW)
-    return (millis() - startTime);
-  else
-    return 0;
-}
-
-
 
 ////////////////////////////////////////////////////////////////////////////////////////
 // NAME: printPowerSerial
@@ -122,18 +110,33 @@ void printPowerSerial(float pumpSpeed,float flowRate,float T1,float T2,float cur
   Serial.println(" W");
 }
 
-//////////////////////////////////////////////////////////////
-void setup(void)
-{
+////////////////////////////////////////////////////////////////////////////////////////
+// NAME: printPowerLCD
+// DESC: Writes out details of the power calculation to the LCD display..
+//       Uses only the parameters provided to the function, not global variables.
+// HIST: 01 December 2012   GJ  ORIGINAL VERSION
+//
+void printPowerLCD(float pumpSpeed,float flowRate,float T1,float T2,float curPower) {
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("T=");
+  lcd.print(T1,0);
+  lcd.print(",");
+  lcd.print(T2,0);
+  lcd.print(",W=");
+  lcd.print(pumpSpeed,0);
+  lcd.print("%");
+  lcd.setCursor(0,1);
+  lcd.print("P=");
+  lcd.print(curPower,1);
+  lcd.print("W");
+  lcd.blink();
+}  
+
+
+void init_sensors() {
   boolean foundT2 = FALSE;
   boolean foundT1 = FALSE;
-  // start serial port
-  Serial.begin(9600);
-  Serial.println("SolThMon - Solar Thermal Power Monitor");
-
-  ledInit();
-  pinMode(SWITCH_PIN, INPUT);
-  digitalWrite(SWITCH_PIN, HIGH);
 
   // Start up the temperature measurement library
   sensors.begin();
@@ -145,6 +148,12 @@ void setup(void)
   Serial.print("Found ");
   Serial.print(numberOfDevices, DEC);
   Serial.println(" devices.");
+  
+  lcd.setCursor(0,1);
+  lcd.print("Found ");
+  lcd.print(numberOfDevices,DEC);
+  lcd.print(" devices");
+  lcd.blink();
 
   // report parasite power requirements
   Serial.print("Parasite power is: "); 
@@ -206,6 +215,22 @@ void setup(void)
     Serial.println(" *****");
   }
 
+  
+}
+
+//////////////////////////////////////////////////////////////
+void setup(void)
+{
+  // start serial port
+  Serial.begin(9600);
+  Serial.println("SolThMon - Solar Thermal Power Monitor");
+  
+  lcd.begin(16,2);
+  lcd.print("Solar Thermal Monitor");
+  lcd.blink();
+
+  init_sensors();
+
   timer = millis();
   sampleStartMillis = millis();
   hourStartMillis = sampleStartMillis;
@@ -218,23 +243,18 @@ void setup(void)
   hourPowerTotal = 0;
   prevDayPowerMean = 0;
   prevHourPowerMean = 0.;  
-
-  showLEDChangeAnim(1000);
-
 }
 
+void loop1() {}
 /////////////////////////////////////////////////////////////////
 void loop(void)
 { 
   // Variables for power calculation.
-  float pumpSpeed;
-  float T1,T2;
-  float flowRate;
-  float curPower;
-  long int switchTimeVal;
-  static int displayMode = 0;
+  static float pumpSpeed = 0.0;
+  static float T1=0.0,T2=0.0;
+  static float flowRate=0.0;
+  static float curPower=0.0;
   static long int displayUpdateMillis = 0;
-  static boolean showDisplay = FALSE;
 
   // Check if it is time to collect a data sample
   if ((millis() - sampleStartMillis) > SAMPLE_MILLIS) {
@@ -281,55 +301,18 @@ void loop(void)
   // Check if it is time to update the display values.
   if ((millis() - displayUpdateMillis) > DISPLAY_UPDATE_MILLIS) {
     displayUpdateMillis = millis();
-    // Only service the display if the switch is pressed, to save power.
-    switchTimeVal = switchTime();
-    if (switchTimeVal <=CUR_POW_MILLIS) {
-      showDisplay = FALSE;
-      displayMode = 0;
-    }
-    if ((switchTimeVal > CUR_POW_MILLIS) && (displayMode == 0)) {
       Serial.print("Showing Power - ");
-      //curPower = 1200;
       Serial.println(curPower/100);
-      setLEDVal((int)(curPower/100));
-      showDisplay = TRUE;
-      displayMode = 1;
-    }
-    if ((switchTimeVal > FLOW_MILLIS) && (displayMode == 1)) {
       Serial.print("Showing Flow - ");
-      //pumpSpeed = 0.30;
-      setLEDVals(17,17);
-      serviceLED();
-      showLEDChangeAnim(200);
       Serial.println(pumpSpeed*100);
-      setLEDVal((int)(pumpSpeed * 100));
-      showDisplay = TRUE;
-      displayMode = 2;
-    }
-    if ((switchTimeVal > T1_MILLIS) && (displayMode == 2)) {
       Serial.print("Showing T1 ");
-      //T1 = 25;
-      setLEDVals(17,17);
-      serviceLED();
-      showLEDChangeAnim(200);
       Serial.println(T1);
-      setLEDVal((int)(T1));
-      showDisplay = TRUE;
-      displayMode = 3;
-    }
-    if ((switchTimeVal > T2_MILLIS) && (displayMode == 3)) {
       Serial.print("Showing T2 ");
-      //T2 = 35;
-      showLEDChangeAnim(200);
-      setLEDVals(17,17);
-      serviceLED();
       Serial.println(T2);
-      setLEDVal((int)(T2));
-      showDisplay = TRUE;
-      displayMode = 4;
-    }
+
+      printPowerLCD(pumpSpeed,flowRate,T1,T2,curPower);
+
   }
-  if (showDisplay) serviceLED();
 
 }
 
