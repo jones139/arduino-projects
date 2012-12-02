@@ -124,12 +124,12 @@ void printPowerLCD(float pumpSpeed,float flowRate,float T1,float T2,float curPow
   lcd.print(",");
   lcd.print(T2,0);
   lcd.print(",W=");
-  lcd.print(pumpSpeed,0);
+  lcd.print(pumpSpeed*100,0);
   lcd.print("%");
   lcd.setCursor(0,1);
   lcd.print("P=");
-  lcd.print(curPower,1);
-  lcd.print("W");
+  lcd.print(curPower/1000.,1);
+  lcd.print("kW");
   lcd.blink();
 }  
 
