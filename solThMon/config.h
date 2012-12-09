@@ -10,7 +10,8 @@
  * Graham Jones, 18 November 2012
  *
  */
- 
+#define DEBUG 0   // Affects frequency of logging to serial port.
+
 // Data wire is plugged into port 8 on the Arduino
 #define ONE_WIRE_BUS 8
 #define TEMPERATURE_PRECISION 9
@@ -37,7 +38,7 @@
 #define M_CAL 5.7  // water flow rate at 100% load factor (l/min).
 
 #define SAMPLE_MILLIS 1000   // Period between samples (miliseconds).
-#define MINUTE_MILLIS 6000  // number of miliseconds in a minute.
+#define MINUTE_MILLIS 60000  // number of miliseconds in a minute.
 #define HOUR_MILLIS 3600000  // number of miliseconds in an hour.
 #define DAY_MILLIS 86400000  // number of miliseconds in a day.
 

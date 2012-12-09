@@ -13,12 +13,12 @@
 float getPumpSpeed(void) {
   int val;
   float loadFactor;
-  Serial.println("getPumpSpeed (SIMPLE_PUMP_SPEED_CALC Version)");
+  //Serial.println("getPumpSpeed (SIMPLE_PUMP_SPEED_CALC Version)");
   val = analogRead(PUMP_SPEED_PIN);
   loadFactor = val * 0.3 / 480.;
-  Serial.print("loadFactor=");
-  Serial.print(loadFactor);
-  Serial.println(".");
+  //Serial.print("loadFactor=");
+  //Serial.print(loadFactor);
+  //Serial.println(".");
   return(loadFactor);
 }
 
@@ -31,7 +31,7 @@ float getPumpSpeed(void) {
   float total = 0.0;
   float mean;
   float loadFactor;
-  Serial.println("getPumpSpeed (LoadFactor Calculation Version)");
+  //Serial.println("getPumpSpeed (LoadFactor Calculation Version)");
   for (n=0;n<NSAMPLES;n++) {
     val  = analogRead(PUMP_SPEED_PIN);
     total +=val;
@@ -40,13 +40,13 @@ float getPumpSpeed(void) {
   }
   mean = total/NSAMPLES;
   loadFactor = 1.0* (NSAMPLES-nLowSamples) / NSAMPLES;
-  Serial.println("getLoadFactor");
-  Serial.print("mean=");
-  Serial.print(mean);
-  Serial.println(".");
-  Serial.print("nLowSamples=");
-  Serial.print(nLowSamples);
-  Serial.println(".");
+  //Serial.println("getLoadFactor");
+  //Serial.print("mean=");
+  //Serial.print(mean);
+  //Serial.println(".");
+  //Serial.print("nLowSamples=");
+  //Serial.print(nLowSamples);
+  //Serial.println(".");
   return(loadFactor);
 }
 

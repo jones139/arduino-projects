@@ -33,6 +33,7 @@
 #include <SD.h>
 #include "config.h"
 #include "pumpSpeed.h"
+#include "memUtils.h"
 
 // lcd display
 LiquidCrystal lcd(7,6, 5, 4, 3, 2);
@@ -70,6 +71,15 @@ unsigned long int timer = 0;
 // Variables for SD Card files.
 boolean useSD = false;
 
+// The simplest memory availability check I could find - from
+// http://playground.arduino.cc/Code/AvailableMemory.
+int freeRam () {
+  extern int __heap_start, *__brkval; 
+  int v; 
+  return (int) &v - (__brkval == 0 ? (int) &__heap_start : (int) __brkval); 
+}
+
+
 
 ///////////////////////////////////////////////////////////////////////////
 // NAME: printAddress
@@ -102,10 +112,16 @@ boolean cmpDeviceAddress(DeviceAddress add1, DeviceAddress add2) {
 // HIST: 13 November 2012   GJ  ORIGINAL VERSION
 //
 void printPowerSerial(float pumpSpeed,float flowRate,float T1,float T2,float curPower) {
+  //P(pumpSpeedStr)="PumpSpeed (%)";
   Serial.print("PumpSpeed (%): ");
+  //serialPrintP(pumpSpeedStr);
   Serial.print(pumpSpeed);
+  //P(flowRateStr)=", FlowRate (kg/s): ";
+  //serialPrintP(flowRateStr);
   Serial.print(", FlowRate (kg/s): ");
   Serial.print(flowRate);
+  //P(tempStr)=", Temps: ";
+  //serialPrintP(tempStr);
   Serial.print(", Temps: ");
   Serial.print(T1);
   Serial.print(", ");
@@ -139,26 +155,33 @@ void printPowerLCD(float pumpSpeed,float flowRate,float T1,float T2,float curPow
 }  
 
 void printPowerSD(char *fname,float pumpSpeed, float flowRate, float T1, float T2, float curPower) {
+  Serial.println("printPowerSD");
 #if USE_SD_CARD
   File fileObj;
   if (useSD) {
     fileObj = SD.open(fname,FILE_WRITE);
     if (fileObj) {
-        Serial.println("Opened file for writing");
-        fileObj.print(millis());
-        fileObj.print(',');
-        fileObj.print(pumpSpeed);
-        fileObj.print(',');
-        fileObj.print(flowRate);
-        fileObj.print(',');
-        fileObj.print(T1);
-        fileObj.print(',');
-        fileObj.print(T2);
-        fileObj.print(',');
-        fileObj.print(curPower);
-        fileObj.close();
-        Serial.println("Closed File");
-    }    
+      Serial.print("Opened ");
+      Serial.println(fname);
+      fileObj.print((int)(millis()/60000));  // units of minutes.
+      fileObj.print(',');
+      fileObj.print(pumpSpeed);
+      fileObj.print(',');
+      fileObj.print(flowRate);
+      fileObj.print(',');
+      fileObj.print(T1);
+      fileObj.print(',');
+      fileObj.print(T2);
+      fileObj.print(',');
+      fileObj.print(curPower);
+      fileObj.println("");
+      fileObj.close();
+      Serial.println("Done");
+    }  
+    else {
+      Serial.print("Failed to Open ");
+      Serial.println(fname);
+    }
   }
 #endif
 }
@@ -179,17 +202,12 @@ void init_sensors() {
   Serial.print("Found ");
   Serial.print(numberOfDevices, DEC);
   Serial.println(" devices.");
-  
+
   lcd.setCursor(0,1);
   lcd.print("Found ");
   lcd.print(numberOfDevices,DEC);
   lcd.print(" devices");
   lcd.blink();
-
-  // report parasite power requirements
-  //Serial.print("Parasite power is: "); 
-  //if (sensors.isParasitePowerMode()) Serial.println("ON");
-  //else Serial.println("OFF");
 
   // Loop through each device, print out address - we need this so we can find the 
   //   address of a new temperature sensor if we replace one.
@@ -204,20 +222,19 @@ void init_sensors() {
       printAddress(tempDeviceAddress);
       Serial.println();
 
-    //  Serial.print("Setting resolution to ");
-    //  Serial.println(TEMPERATURE_PRECISION, DEC);
+      //  Serial.print("Setting resolution to ");
+      //  Serial.println(TEMPERATURE_PRECISION, DEC);
 
       // set the resolution to TEMPERATURE_PRECISION bit (Each Dallas/Maxim device is capable of several different resolutions)
       sensors.setResolution(tempDeviceAddress, TEMPERATURE_PRECISION);
 
-      Serial.print("Resolution actually set to: ");
+      Serial.print("Resolution set to: ");
       Serial.print(sensors.getResolution(tempDeviceAddress), DEC); 
       Serial.println();
     }
     else{
       Serial.print("Found ghost device at ");
-      Serial.print(i, DEC);
-      Serial.print(" but could not detect address. Check power and cabling");
+      Serial.println(i, DEC);
     }
   }
 
@@ -226,27 +243,27 @@ void init_sensors() {
     // Search the wire for address
     if(sensors.getAddress(tempDeviceAddress, i)) { 
       if (cmpDeviceAddress(tempDeviceAddress,(DeviceAddress)T1_ADDRESS)) {
-        Serial.println("Found T1 Sensor");
+        //Serial.println("Found T1 Sensor");
         foundT1 = TRUE;
       }
       if (cmpDeviceAddress(tempDeviceAddress,(DeviceAddress)T2_ADDRESS)) {
-        Serial.println("Found T2 Sensor");
+        //Serial.println("Found T2 Sensor");
         foundT2 = TRUE;
       }
     }
   }
   if (!foundT1) {
-    Serial.print("**** ERROR - Failed to Find T1 Sensor at address ");
+    Serial.print("**** ERROR - Failed to Find T1 Sensor ");
     printAddress((DeviceAddress)T2_ADDRESS);
-    Serial.println(" *****");
+    Serial.println(" *");
   }
   if (!foundT2) {
-    Serial.print("**** ERROR - Failed to Find T2 Sensor at address ");
+    Serial.print("**** ERROR - Failed to Find T2 Sensor ");
     printAddress((DeviceAddress)T1_ADDRESS);
-    Serial.println(" *****");
+    Serial.println(" *");
   }
 
-  
+
 }
 
 //////////////////////////////////////////////////////////////
@@ -255,53 +272,42 @@ void setup(void)
   File fileObj;
   // start serial port
   Serial.begin(9600);
-  Serial.println("SolThMon - Solar Thermal Power Monitor");
-  
+  Serial.println("SolThMon");
+  //Serial.print("RAM=");
+  Serial.println(freeRam());
+  //Serial.println(memoryFree());
+
   lcd.begin(16,2);
   lcd.print("Solar Thermal Monitor");
   lcd.blink();
-  
-  #if USE_SD_CARD
-    Serial.print("Intialising SD Card...");
-    pinMode(10,OUTPUT);  // set CS line to output.
-    if (!SD.begin(10)) {
-      Serial.print("SD Card Initialisation Failed");
-      useSD = false;
-    }
-    else {
-      Serial.print("SD Card Initialisation OK");
-      useSD = true;
-    }
-/*      fileObj = SD.open(HOURLY_FILE,FILE_WRITE);
-      if (fileObj) {
-        Serial.println("Opened hourly file for writing");
-        fileObj.println("Starting Logging...");
-        fileObj.close();
-        useSD = true;
-      } else {
-        Serial.println("Failed to open hourly file");
-        useSD = false;
-      }
-      fileObj = SD.open(DAILY_FILE,FILE_WRITE);
-      if (fileObj) {
-        Serial.println("Opened daily file for writing");
-        fileObj.println("Starting Logging....");
-        fileObj.close();
-        useSD = true;
-      } else {
-        Serial.println("Failed to open daily file");
-        useSD = false;
-      }
-    } 
-   */ 
-  #else
-    useSD = false;  
-  #endif
 
-  Serial.println("initialising sensors...");
+  //lcd.print("");
+  //lcd.print("A fairly long string to test effect 44 chars");
+
+  //Serial.print("RAM=");
+  //Serial.println(freeRam());
+  //Serial.println(memoryFree());
+#if USE_SD_CARD
+  Serial.println("Int SD Card.");
+  pinMode(10,OUTPUT);  // set CS line to output.
+  if (!SD.begin(10)) {
+    Serial.println("SD Card Init Failed");
+    useSD = false;
+  }
+  else {
+    Serial.println("OK");
+    //Serial.print("RAM=");
+    //Serial.println(freeRam());
+    useSD = true;
+  }
+#else
+  useSD = false;  
+#endif
+
+  Serial.println("init sensors...");
   init_sensors();
 
-  Serial.println("Initialising timers...");
+  Serial.println("Init timers...");
   timer = millis();
   sampleStartMillis = millis();
   minuteStartMillis = sampleStartMillis;
@@ -315,11 +321,10 @@ void setup(void)
   hourPowerTotal = 0;
   prevDayPowerMean = 0;
   prevHourPowerMean = 0.;  
-  
-  Serial.println("setup complete...");
+
+  Serial.println("setup done");
 }
 
-void loop1() {}
 /////////////////////////////////////////////////////////////////
 void loop(void)
 { 
@@ -332,26 +337,26 @@ void loop(void)
 
   // Check if it is time to collect a data sample
   if ((millis() - sampleStartMillis) > SAMPLE_MILLIS) {
-    Serial.println("sample...");
+    //Serial.println("sample...");
     sampleStartMillis = millis();
 
-    Serial.println("Getting temperatures..");
+    //Serial.println("Getting temperatures..");
     sensors.requestTemperatures(); // Send the command to get temperatures
     T1 = sensors.getTempC(t1Address);
     T2 = sensors.getTempC(t2Address);
-    Serial.println("Getting Load Factor...");
+    //Serial.println("Getting Load Factor...");
     pumpSpeed = getPumpSpeed();
     flowRate = pumpSpeed * M_CAL / 60.0;
     curPower = flowRate * CP * (T2-T1);
 
-    printPowerSerial(pumpSpeed,flowRate,T1,T2,curPower);
+    if (DEBUG) printPowerSerial(pumpSpeed,flowRate,T1,T2,curPower);
 
     hourPowerTotal += curPower;
     dayPowerTotal += curPower;
     hourCount++;
     dayCount++;
 
-   // Check to see if a minute has elapsed
+    // Check to see if a minute has elapsed
     if ((millis() - minuteStartMillis) > MINUTE_MILLIS) {
       minuteStartMillis = millis();
       printPowerSD(MINUTELY_FILE,pumpSpeed,flowRate,T1,T2,curPower);
@@ -379,20 +384,13 @@ void loop(void)
   // Check if it is time to update the display values.
   if ((millis() - displayUpdateMillis) > DISPLAY_UPDATE_MILLIS) {
     displayUpdateMillis = millis();
-      Serial.print("Showing Power - ");
-      Serial.println(curPower/100);
-      Serial.print("Showing Flow - ");
-      Serial.println(pumpSpeed*100);
-      Serial.print("Showing T1 ");
-      Serial.println(T1);
-      Serial.print("Showing T2 ");
-      Serial.println(T2);
-
-      printPowerLCD(pumpSpeed,flowRate,T1,T2,curPower);
+    printPowerLCD(pumpSpeed,flowRate,T1,T2,curPower);
 
   }
 
 }
+
+
 
 
 
