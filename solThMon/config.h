@@ -16,6 +16,12 @@
 #define TEMPERATURE_PRECISION 9
 #define NSAMPLES 1000     // Number of analog samples to collect for
 // load factor calculation.
+#define USE_SD_CARD 1   // Whether or not to write data to SD Card.
+                        // if it is set to 1, pins 10,11,12 and 13 
+                        // are used for CS,MOSI,MISO and CLK respectively.
+#define MINUTELY_FILE "minutely.txt"
+#define HOURLY_FILE "hourly.txt"
+#define DAILY_FILE "daily.txt"
 #define USE_SIMPLE_PUMP_SPEED_CALC 1  // Just measure dc input comment
                                 // out this line to measure shape of
                                 // the waveform rather than voltage.
@@ -31,6 +37,7 @@
 #define M_CAL 5.7  // water flow rate at 100% load factor (l/min).
 
 #define SAMPLE_MILLIS 1000   // Period between samples (miliseconds).
+#define MINUTE_MILLIS 6000  // number of miliseconds in a minute.
 #define HOUR_MILLIS 3600000  // number of miliseconds in an hour.
 #define DAY_MILLIS 86400000  // number of miliseconds in a day.
 
