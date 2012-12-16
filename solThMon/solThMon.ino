@@ -30,10 +30,9 @@
 #include <OneWire.h>
 #include <DallasTemperature.h>
 #include <LiquidCrystal.h>
-#include <SD.h>
+#include <Time.h>
 #include "config.h"
 #include "pumpSpeed.h"
-#include "memUtils.h"
 
 // lcd display
 LiquidCrystal lcd(7,6, 5, 4, 3, 2);
@@ -52,6 +51,8 @@ float dayPowerTotal;
 float prevHourPowerMean;
 float prevDayPowerMean;
 int ival1,ival2;
+
+char appMode = DISPLAY_MODE;  // Display or settings mode?
 
 
 // Initialise oneWire bus 
@@ -137,55 +138,53 @@ void printPowerSerial(float pumpSpeed,float flowRate,float T1,float T2,float cur
 //       Uses only the parameters provided to the function, not global variables.
 // HIST: 01 December 2012   GJ  ORIGINAL VERSION
 //
-void printPowerLCD(float pumpSpeed,float flowRate,float T1,float T2,float curPower) {
+void printPowerLCD(
+  char displayMode,
+  float pumpSpeed,
+  float flowRate,
+  float T1,float T2,
+  float curPower,
+  float hourMean,
+  float dayMean) {
+  float kWh;
   lcd.clear();
   lcd.setCursor(0,0);
   lcd.print("T=");
-  lcd.print(T1,0);
+  if (T1>-30)
+    lcd.print(T1,1);
+  else
+    lcd.print("**.*");    
   lcd.print(",");
-  lcd.print(T2,0);
+  if (T1>-30)
+    lcd.print(T2,1);
+  else
+    lcd.print("**.*");
   lcd.print(",W=");
   lcd.print(pumpSpeed*100,0);
   lcd.print("%");
+  
   lcd.setCursor(0,1);
-  lcd.print("P=");
-  lcd.print(curPower/1000.,1);
-  lcd.print("kW");
-  lcd.blink();
-}  
-
-void printPowerSD(char *fname,float pumpSpeed, float flowRate, float T1, float T2, float curPower) {
-  Serial.println("printPowerSD");
-#if USE_SD_CARD
-  File fileObj;
-  if (useSD) {
-    fileObj = SD.open(fname,FILE_WRITE);
-    if (fileObj) {
-      Serial.print("Opened ");
-      Serial.println(fname);
-      fileObj.print((int)(millis()/60000));  // units of minutes.
-      fileObj.print(',');
-      fileObj.print(pumpSpeed);
-      fileObj.print(',');
-      fileObj.print(flowRate);
-      fileObj.print(',');
-      fileObj.print(T1);
-      fileObj.print(',');
-      fileObj.print(T2);
-      fileObj.print(',');
-      fileObj.print(curPower);
-      fileObj.println("");
-      fileObj.close();
-      Serial.println("Done");
-    }  
-    else {
-      Serial.print("Failed to Open ");
-      Serial.println(fname);
-    }
+  switch(displayMode) {
+    case DISPLAY_CURRENT:
+      lcd.print("P_CURR=");
+      lcd.print(curPower/1000.,1);
+      lcd.print("kW");
+      break;
+    case DISPLAY_HOURLY:
+      kWh = hourMean*1./1000.;
+      lcd.print("E_HOUR=");
+      lcd.print(kWh,1);
+      lcd.print("kWh");
+      break;
+    case DISPLAY_DAILY:
+      kWh = dayMean*24./1000.;
+      lcd.print("E_DAY=");
+      lcd.print(kWh,1);
+      lcd.print("kWh");
+      break;
   }
-#endif
-}
-
+  lcd.blink();  
+}  
 
 
 void init_sensors() {
@@ -269,7 +268,6 @@ void init_sensors() {
 //////////////////////////////////////////////////////////////
 void setup(void)
 {
-  File fileObj;
   // start serial port
   Serial.begin(9600);
   Serial.println("SolThMon");
@@ -280,30 +278,19 @@ void setup(void)
   lcd.begin(16,2);
   lcd.print("Solar Thermal Monitor");
   lcd.blink();
+  
 
-  //lcd.print("");
-  //lcd.print("A fairly long string to test effect 44 chars");
-
+  setTime(00,00,00,12,12,12);
+  
+  // Set up pushbuttons
+  pinMode(PB1, INPUT);
+  digitalWrite(PB1, HIGH);
+  
+  pinMode(PB2, INPUT);
+  digitalWrite(PB2,HIGH);
+  
   //Serial.print("RAM=");
   //Serial.println(freeRam());
-  //Serial.println(memoryFree());
-#if USE_SD_CARD
-  Serial.println("Int SD Card.");
-  pinMode(10,OUTPUT);  // set CS line to output.
-  if (!SD.begin(10)) {
-    Serial.println("SD Card Init Failed");
-    useSD = false;
-  }
-  else {
-    Serial.println("OK");
-    //Serial.print("RAM=");
-    //Serial.println(freeRam());
-    useSD = true;
-  }
-#else
-  useSD = false;  
-#endif
-
   Serial.println("init sensors...");
   init_sensors();
 
@@ -326,7 +313,7 @@ void setup(void)
 }
 
 /////////////////////////////////////////////////////////////////
-void loop(void)
+void loop_logging(void)
 { 
   // Variables for power calculation.
   static float pumpSpeed = 0.0;
@@ -334,11 +321,32 @@ void loop(void)
   static float flowRate=0.0;
   static float curPower=0.0;
   static long int displayUpdateMillis = 0;
+  static char displayMode = DISPLAY_CURRENT;
+
+  boolean pb1State,pb2State;
+  static boolean prevPb1State=HIGH, prevPb2State=HIGH;
+  
+  pb1State = digitalRead(PB1);
+  pb2State = digitalRead(PB2);
+  
+  //Serial.print(pb1State); Serial.println(prevPb1State);
+  // pb1 cycles display mode - current / hourly / daily
+  if ((pb1State == LOW) && (prevPb1State == HIGH)) {
+    displayMode ++;
+    if (displayMode > DISPLAY_DAILY)
+      displayMode = DISPLAY_CURRENT;
+    Serial.print("displayMode=");
+    Serial.println((int)displayMode);
+  } 
+  prevPb1State = pb1State;
 
   // Check if it is time to collect a data sample
   if ((millis() - sampleStartMillis) > SAMPLE_MILLIS) {
     //Serial.println("sample...");
     sampleStartMillis = millis();
+
+    if (DEBUG) Serial.print(pb1State);
+    if (DEBUG) Serial.println(pb2State);
 
     //Serial.println("Getting temperatures..");
     sensors.requestTemperatures(); // Send the command to get temperatures
@@ -359,7 +367,6 @@ void loop(void)
     // Check to see if a minute has elapsed
     if ((millis() - minuteStartMillis) > MINUTE_MILLIS) {
       minuteStartMillis = millis();
-      printPowerSD(MINUTELY_FILE,pumpSpeed,flowRate,T1,T2,curPower);
     }
 
     // Check to see if an hour has elapsed
@@ -368,7 +375,6 @@ void loop(void)
       hourPowerTotal = 0.;
       hourCount = 0;
       hourStartMillis = millis();
-      printPowerSD(HOURLY_FILE,pumpSpeed,flowRate,T1,T2,curPower);
     }
 
     // Check to see if a day has elapsed.
@@ -377,19 +383,29 @@ void loop(void)
       dayPowerTotal = 0.;
       dayCount = 0;
       dayStartMillis = millis();
-      printPowerSD(DAILY_FILE,pumpSpeed,flowRate,T1,T2,curPower);
     }
   }
 
   // Check if it is time to update the display values.
   if ((millis() - displayUpdateMillis) > DISPLAY_UPDATE_MILLIS) {
     displayUpdateMillis = millis();
-    printPowerLCD(pumpSpeed,flowRate,T1,T2,curPower);
+    printPowerLCD(displayMode,pumpSpeed,flowRate,T1,T2,curPower,prevHourPowerMean,prevDayPowerMean);
 
   }
 
 }
 
+void loop_settings() {
+}
+
+void loop(void) {
+  if (appMode == DISPLAY_MODE)
+    loop_logging(); 
+  else if (appMode == SETTINGS_MODE)
+    loop_settings();
+  else
+    appMode == DISPLAY_MODE;
+}
 
 
 
