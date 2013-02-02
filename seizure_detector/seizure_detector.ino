@@ -91,6 +91,10 @@ void setup()
   interrupts();             // enable all interrupts
 }
 
+////////////////////////////////////////////////////////
+// Interrupt service routine - called regularly to collect
+// data and store in FFT capture buffer.
+//
 ISR(TIMER1_COMPA_vect)          // timer compare interrupt service routine
 {
   // Do nothing if we are at the end of the capture buffer.
@@ -101,22 +105,57 @@ ISR(TIMER1_COMPA_vect)          // timer compare interrupt service routine
   position++;
 }
 
+void digitalClockDisplay(){
+  // digital clock display of the time
+  printDigits(day());
+  PgmPrint("/");
+  printDigits(month());
+  PgmPrint("/");
+  Serial.print(year()); 
+  PgmPrint(" ");
+  printDigits(hour());
+  PgmPrint(":");
+  printDigits(minute());
+  PgmPrint(":");
+  printDigits(second());
+  //Serial.println(); 
+}
+
+void printDigits(int digits){
+  // utility function for digital clock display: prints preceding colon and leading 0
+  if(digits < 10)
+    PgmPrint('0');
+  Serial.print(digits);
+}
+
+
+//////////////////////////////////////////////////////////
+// Main Loop
+//
 void loop()
 {
+  // See if the FFT capture buffer is full.
+  // If so, process data.
   if (position == FFT_N) {
+    // Do FFT Calculation
     fft_input(capture,bfly_buff);
     fft_execute(bfly_buff);
     fft_output(bfly_buff,spectrum);
+    // Reset buffer position ready for next data.
+    position = 0;
      
+    // Write results to serial port.
+    digitalClockDisplay();
+    PgmPrint(",");
     for (byte i=0; i<FFT_N/2; i++) {
       //Serial.write(spectrum[i]);
       Serial.print(spectrum[i]);
       PgmPrint(",");
     }
-    position = 0;
     Serial.println();
     Serial.println(memoryFree());
 
+    // Write resutls to SD Card
     logfile.open(LOGFN,O_CREAT | O_APPEND | O_WRITE);
     if (!logfile.isOpen()) error ("create");
     for (byte i=0;i<FFT_N/2;i++) {
@@ -125,7 +164,6 @@ void loop()
     }
     logfile.println();
     logfile.close();
-    Serial.println(memoryFree());
   }
 }
 
