@@ -12,6 +12,10 @@
  * DA1307 Real Time Clock module connected as follows:
  *   Analogue A4 - STA
  *   Analogue A5 - SCL
+ *   2k2 pull up resistors between A4 and +5V and A5 and +5V
+ *
+ * And when it arrives, an accelerometer module, also on A4 and A5.
+ *
  */
 #include <stdint.h>
 #include <ffft.h>
@@ -21,20 +25,24 @@
 #include <Fat16.h>
 #include <Fat16util.h>
 #include <memUtils.h>
+
+// General Settings
 static int pinNo = 0;   // ADC Channel to capture
 static int SD_CS = 10;  // pin number of the chip select for the SD card.
 static int freq = 64;  // sample frequency (Hz) (128 samples = 1 second collection)
 #define LOGFN "SEIZURE.TXT"
 
+// Buffers for the Fast Fourier Transform code.
 volatile byte position = 0;
 int16_t capture[FFT_N];       // Capture Buffer
 complex_t bfly_buff[FFT_N];
 uint16_t spectrum[FFT_N/2];   // Output buffer
 
+// Buffers for the SD card logging.
 SdCard sdCard;
 Fat16 logfile;
 
-// store error strings in flash to save RAM
+// store error strings in flash to save RAM - uses Fat16Util
 #define error(s) error_P(PSTR(s))
 
 void error_P(const char* str) {
@@ -53,14 +61,21 @@ void setup()
   //establishContact();
   Serial.println(memoryFree());
 
+  setSyncProvider(RTC.get);   // the function to get the time from the RTC
+  if(timeStatus()!= timeSet) 
+     PgmPrintln("Unable to sync with the RTC");
+  else
+     PgmPrintln("RTC has set the system time");      
+
+
   // Initialise SD Card
   pinMode(SD_CS,OUTPUT);
   if (!sdCard.init()) error("card.init");  
   // initialize a FAT16 volume
   if (!Fat16::init(&sdCard)) error("Fat16::init");
   
-  Serial.println("card initialized.");
-  Serial.print("FFT_N=");
+  PgmPrintln("card initialized.");
+  PgmPrint("FFT_N=");
   Serial.println(FFT_N);
   Serial.println(memoryFree());
 
@@ -96,7 +111,7 @@ void loop()
     for (byte i=0; i<FFT_N/2; i++) {
       //Serial.write(spectrum[i]);
       Serial.print(spectrum[i]);
-      Serial.print(",");
+      PgmPrint(",");
     }
     position = 0;
     Serial.println();
