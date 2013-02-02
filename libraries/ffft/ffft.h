@@ -1,5 +1,5 @@
 #ifndef FFT_N
-#define FFT_N	128		/* Number of samples (64,128,256,512). Don't forget to clean! */
+#define FFT_N	64		/* Number of samples (64,128,256,512). Don't forget to clean! */
 //#define INPUT_NOUSE
 //#define INPUT_IQ
 

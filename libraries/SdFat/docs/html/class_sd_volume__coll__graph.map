@@ -1,0 +1,10 @@
+<map id="G" name="G">
+<area shape="rect" id="node2" href="$unioncache__t.html" title="Cache for an SD data block." alt="" coords="247,187,313,213"/>
+<area shape="rect" id="node4" href="$structdirectory_entry.html" title="FAT short directory entry." alt="" coords="5,96,107,123"/>
+<area shape="rect" id="node6" href="$structfat32__fsinfo.html" title="FSINFO sector for a FAT32 volume." alt="" coords="131,96,220,123"/>
+<area shape="rect" id="node8" href="$structfat__boot.html" title="Boot sector for a FAT12/FAT16 volume." alt="" coords="245,96,315,123"/>
+<area shape="rect" id="node10" href="$structmaster_boot_record.html" title="Master Boot Record." alt="" coords="339,96,465,123"/>
+<area shape="rect" id="node12" href="$structpartition_table.html" title="MBR partition table entry." alt="" coords="352,5,453,32"/>
+<area shape="rect" id="node14" href="$structfat32__boot.html" title="Boot sector for a FAT32 volume." alt="" coords="491,96,573,123"/>
+<area shape="rect" id="node16" href="$class_sd2_card.html" title="Raw access to SD and SDHC flash memory cards." alt="" coords="350,187,420,213"/>
+</map>

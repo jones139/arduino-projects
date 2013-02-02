@@ -1,0 +1,42 @@
+SdFat is setup to use these pins on Teensy 3.0:
+
+11 - MOSI
+12 - MISO
+13 - SCK
+
+The following are the SPI bus speeds for 
+
+bool SdFat::begin(uint8_t chipSelectPin, uint8_t spiRate);
+
+The higher speed is for F_BUS == 48 MHz and lower speed is for F_BUS == 24 MHz.
+
+spiRate = 0 or 1  : 24 or 12 Mbit/sec
+spiRate = 2 or 3 : 12 or 6 Mbit/sec
+spiRate = 4 or 5 : 6 or 3 Mbit/sec
+spiRate = 6 or 7 : 3 or 1.5 Mbit/sec
+spiRate = 8 or 9 : 1.5 or 0.75 Mbit/sec
+spiRate = 10 or 11 : 250 kbit/sec
+spiRate = 12 or greater : 125 kbit/sec
+
+Large reads and writes use fast multi-block SD read/write commands. For optimal
+speed, use records that are a multiple of 512 bytes.
+
+Run the bench.ino example to explore large read/write speed.
+
+Replace this line:
+
+#define BUF_SIZE 100
+
+With a large size like this:
+
+#define BUF_SIZE 4096
+
+For best results the record size should be a power of two (512, 1024, 2048,
+4096, 8192). In this case records will be aligned with FAT cluster boundaries.
+
+Since Teensy is fast, increase the test file size by editing this line:
+
+#define FILE_SIZE_MB 5
+
+Run the PrintBenchmark.ino example to compare text formatting speed of
+Teensy 3.0 with AVR boards.
