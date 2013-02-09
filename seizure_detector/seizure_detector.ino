@@ -54,22 +54,28 @@
 #include <memUtils.h>
 
 // General Settings
-static int pinNo = 0;   // ADC Channel to capture
+static int pinXNo = 0;   // ADC Channel to capture
+static int pinYNo = 0;   // ADC Channel to capture
+static int pinZNo = 0;   // ADC Channel to capture
 static int SD_CS = 10;  // pin number of the chip select for the SD card.
 static int AUDIO_ALARM_PIN = 8;  // digital pin for the audio alarm (connect buzzer from this pin to ground.
 static int freq = 64;  // sample frequency (Hz) (128 samples = 1 second collection)
 #define LOGFN "SEIZURE.CSV"
 
-static int mon_freq_ch = 2;   // monitor channel 2 of the FFT spectrum.
-static int mon_thresh  = 5; // Alarm threshold
-static unsigned long mon_warn_millis = 3000; // alarm level must continue for this time to raise warning.
-static unsigned long mon_alarm_millis = 10000; // alarm level must continue for this time to raise full alarm.
+static int mon_freq_ch_min = 7;   // min channel to monitor - monitor channel 7-10.
+static int mon_freq_ch_max = 10;  // max channel to monitor
+static int mon_thresh  = 10; // Alarm threshold
+static unsigned long mon_warn_millis = 2000; // alarm level must continue for this time to raise warning.
+static unsigned long mon_alarm_millis = 5000; // alarm level must continue for this time to raise full alarm.
+static unsigned long mon_reset_millis = 2000;
 static unsigned long log_millis = 6000;       // SD card logging period.
 
 // Variables for alarms
 boolean mon_thresh_exceeded = false;
 boolean mon_warn_state = false;
 boolean mon_alarm_state = false;
+boolean mon_reset_state = true;
+unsigned long mon_lastreset_millis = 0;   // time the value fell below the alarm threshold.
 unsigned long mon_thresh_millis = 0;  // time that the alarm threshold was exceeded.
 unsigned long last_log_millis = 0;    // time we last wrote data to the SD card
 
@@ -129,6 +135,10 @@ void setup()
   // make a short pip for a warning
  pinMode(AUDIO_ALARM_PIN, OUTPUT);
  tone(AUDIO_ALARM_PIN,200,1000);
+ 
+ // Initialise flags
+ mon_reset_state = true;
+ mon_lastreset_millis = now();
 
   // initialize timer1 to set sample frequency. 
   noInterrupts();           // disable all interrupts
@@ -152,7 +162,10 @@ ISR(TIMER1_COMPA_vect)          // timer compare interrupt service routine
   // Do nothing if we are at the end of the capture buffer.
   if (position >= FFT_N)
     return;
-  capture[position] = analogRead(pinNo);
+  x = analogRead(pinXNo);
+  y = analogRead(pinYNo);
+  z = analogRead(pinZNo);
+  capture[position] = (x+y+z)/3;
   //accel.readAccel(&x,&y,&z);
   //capture[position] = (int)sqrt(x*x+y*y+z*z);
   //capture[position] = x+y+z;
@@ -187,6 +200,7 @@ void printDigits(int digits){
 //
 void loop()
 {
+  int i, maxChan;
   // See if the FFT capture buffer is full.
   // If so, process data.
   if (position == FFT_N) {
@@ -208,8 +222,14 @@ void loop()
     Serial.println();
     Serial.println(memoryFree());
     
+    // get maximum value in monitored range of frequencies
+    maxChan = spectrum[mon_freq_ch_min];
+    for (i=mon_freq_ch_min;i<=mon_freq_ch_max;i++) {
+       if (spectrum[i]>maxChan) 
+         maxChan = spectrum[i];
+    }
     // Decide if we need to raise an alarm (value over threshold for given period)
-    if (spectrum[mon_freq_ch]>=mon_thresh) {
+    if ((maxChan>=mon_thresh)) {
        if (!mon_thresh_exceeded) {
          PgmPrintln("new event");
           mon_thresh_exceeded = true;
@@ -227,30 +247,37 @@ void loop()
     } else {
       if (mon_thresh_exceeded) {
         PgmPrintln("event reset");
+        mon_lastreset_millis = now();
         mon_thresh_exceeded = false;
-        mon_warn_state = false;
-        mon_alarm_state = false; 
-        noTone(AUDIO_ALARM_PIN);
+        //mon_warn_state = false;
+        //mon_alarm_state = false; 
+        //noTone(AUDIO_ALARM_PIN);
       }
+      else if (millis()-mon_lastreset_millis > mon_reset_millis) {
+         mon_warn_state = false;
+         mon_alarm_state = false;
+         noTone(AUDIO_ALARM_PIN);
+       }
     }
     
     // Write to SD card if we are in a warning or alarm state.
     if (mon_thresh_exceeded || (millis()>(last_log_millis +log_millis))) {
       // Write resutls to SD Card
       PgmPrintln("Writing data to log file...");
-      Serial.print(mon_thresh_exceeded);
-      PgmPrint(",");
-      Serial.print(millis());
-      PgmPrint(",");
-      Serial.print(last_log_millis);
-      PgmPrint(",");
-      Serial.println(log_millis);
+      //Serial.print(mon_thresh_exceeded);
+      //PgmPrint(",");
+      //Serial.print(millis());
+      //PgmPrint(",");
+      //Serial.print(last_log_millis);
+      //PgmPrint(",");
+      //Serial.println(log_millis);
       
       logfile.open(LOGFN,O_CREAT | O_APPEND | O_WRITE);
       if (!logfile.isOpen()) error ("create");
       logfile.print(now());
       if (mon_warn_state)       logfile.print(", warning,");
       else if (mon_alarm_state) logfile.print(", *ALARM*,");
+      else if (mon_thresh_exceeded) logfile.print(", poss  ,");
       else                      logfile.print(",        ,");
       
       for (byte i=0;i<FFT_N/2;i++) {
