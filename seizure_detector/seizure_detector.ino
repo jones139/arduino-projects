@@ -35,8 +35,9 @@
  *   Analogue A5 - SCL
  *   2k2 pull up resistors between A4 and +5V and A5 and +5V
  *
- * And when it arrives, an ADXL345 accelerometer module, 
- *   also on A4 and A5.
+ * Analogue accelerometer connected to A0, A1 and A2
+ *
+ * Piezo buzzer connected between pin D4 and ground.
  *
  * ADXL345 code adapted from example by Jens C Brynildsen
  *   (https://github.com/jenschr/Arduino-libraries/blob/master/ADXL345/examples/ADXL345_no_library/BareBones_ADXL345.pde)
@@ -55,10 +56,10 @@
 
 // General Settings
 static int pinXNo = 0;   // ADC Channel to capture
-static int pinYNo = 0;   // ADC Channel to capture
-static int pinZNo = 0;   // ADC Channel to capture
+static int pinYNo = 1;   // ADC Channel to capture
+static int pinZNo = 2;   // ADC Channel to capture
 static int SD_CS = 10;  // pin number of the chip select for the SD card.
-static int AUDIO_ALARM_PIN = 8;  // digital pin for the audio alarm (connect buzzer from this pin to ground.
+static int AUDIO_ALARM_PIN = 4;  // digital pin for the audio alarm (connect buzzer from this pin to ground.
 static int freq = 64;  // sample frequency (Hz) (128 samples = 1 second collection)
 #define LOGFN "SEIZURE.CSV"
 
@@ -68,7 +69,7 @@ static int mon_thresh  = 10; // Alarm threshold
 static unsigned long mon_warn_millis = 2000; // alarm level must continue for this time to raise warning.
 static unsigned long mon_alarm_millis = 5000; // alarm level must continue for this time to raise full alarm.
 static unsigned long mon_reset_millis = 2000;
-static unsigned long log_millis = 6000;       // SD card logging period.
+static unsigned long log_millis = 60000;       // SD card logging period.
 
 // Variables for alarms
 boolean mon_thresh_exceeded = false;
@@ -102,7 +103,8 @@ void error_P(const char* str) {
     PgmPrint("SD error: ");
     Serial.println(sdCard.errorCode, HEX);
   }
-  while(1);
+  // Don't stop just because we can't get to the SD card.
+  //while(1);
 }
 
 void setup()
@@ -118,23 +120,30 @@ void setup()
      PgmPrintln("RTC has set the system time");      
 
   // Initialise accelerometer
-  accel.powerOn();
+  //accel.powerOn();
   // might want to adjust gains here with accel.setAxisGains
 
+   // Initialise audio output.
+   pinMode(AUDIO_ALARM_PIN, OUTPUT);
+   tone(AUDIO_ALARM_PIN,1000,100);
+ 
+ 
   // Initialise SD Card
   pinMode(SD_CS,OUTPUT);
   if (!sdCard.init()) error("card.init");  
   // initialize a FAT16 volume
-  if (!Fat16::init(&sdCard)) error("Fat16::init");
-  
-  PgmPrintln("card initialized.");
+  if (!Fat16::init(&sdCard)) {
+     error("Fat16::init");
+    // make a warning tone
+   tone(AUDIO_ALARM_PIN,200,3000);
+  } else {
+    PgmPrintln("card initialized.");
+    tone(AUDIO_ALARM_PIN,2000,100);
+  }
   PgmPrint("FFT_N=");
   Serial.println(FFT_N);
   Serial.println(memoryFree());
 
-  // make a short pip for a warning
- pinMode(AUDIO_ALARM_PIN, OUTPUT);
- tone(AUDIO_ALARM_PIN,200,1000);
  
  // Initialise flags
  mon_reset_state = true;
@@ -188,6 +197,29 @@ void digitalClockDisplay(){
   //Serial.println(); 
 }
 
+void digitalClockLog(){
+  // digital clock display of the time to log file.
+  printDigitsLog(day());
+  logfile.print("/");
+  printDigitsLog(month());
+  logfile.print("/");
+  logfile.print(year()); 
+  logfile.print(" ");
+  printDigitsLog(hour());
+  logfile.print(":");
+  printDigitsLog(minute());
+  logfile.print(":");
+  printDigitsLog(second());
+  //Serial.println(); 
+}
+
+void printDigitsLog(int digits) {
+ // utility function for digital clock display: prints preceding colon and leading 0
+  if(digits < 10)
+    PgmPrint("0");
+  logfile.print(digits);
+}
+
 void printDigits(int digits){
   // utility function for digital clock display: prints preceding colon and leading 0
   if(digits < 10)
@@ -237,6 +269,7 @@ void loop()
        } 
        if ((millis() - mon_thresh_millis) >= mon_alarm_millis) {
          mon_alarm_state = true;
+         mon_warn_state = false;
          PgmPrintln("****ALARM****");
        } else if ((millis() - mon_thresh_millis) >= mon_warn_millis) {
          mon_warn_state = true;
@@ -264,16 +297,11 @@ void loop()
     if (mon_thresh_exceeded || (millis()>(last_log_millis +log_millis))) {
       // Write resutls to SD Card
       PgmPrintln("Writing data to log file...");
-      //Serial.print(mon_thresh_exceeded);
-      //PgmPrint(",");
-      //Serial.print(millis());
-      //PgmPrint(",");
-      //Serial.print(last_log_millis);
-      //PgmPrint(",");
-      //Serial.println(log_millis);
       
       logfile.open(LOGFN,O_CREAT | O_APPEND | O_WRITE);
       if (!logfile.isOpen()) error ("create");
+      digitalClockLog();
+      logfile.print(", ");
       logfile.print(now());
       if (mon_warn_state)       logfile.print(", warning,");
       else if (mon_alarm_state) logfile.print(", *ALARM*,");
@@ -282,6 +310,11 @@ void loop()
       
       for (byte i=0;i<FFT_N/2;i++) {
          logfile.print( spectrum[i] );
+         logfile.print( ", ");
+      }
+      logfile.print("RAW:,");
+      for (byte i=0;i<FFT_N;i++) {
+         logfile.print( capture[i] );
          logfile.print( ", ");
       }
       logfile.println();
