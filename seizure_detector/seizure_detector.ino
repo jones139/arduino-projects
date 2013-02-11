@@ -63,9 +63,9 @@ static int AUDIO_ALARM_PIN = 4;  // digital pin for the audio alarm (connect buz
 static int freq = 64;  // sample frequency (Hz) (128 samples = 1 second collection)
 #define LOGFN "SEIZURE.CSV"
 
-static int mon_freq_ch_min = 7;   // min channel to monitor - monitor channel 7-10.
+static int mon_freq_ch_min = 6;   // min channel to monitor - monitor channel 7-10.
 static int mon_freq_ch_max = 10;  // max channel to monitor
-static int mon_thresh  = 10; // Alarm threshold
+static int mon_thresh  = 7; // Alarm threshold
 static unsigned long mon_warn_millis = 2000; // alarm level must continue for this time to raise warning.
 static unsigned long mon_alarm_millis = 5000; // alarm level must continue for this time to raise full alarm.
 static unsigned long mon_reset_millis = 2000;
