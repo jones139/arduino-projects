@@ -41,18 +41,27 @@
  *
  * ADXL345 code adapted from example by Jens C Brynildsen
  *   (https://github.com/jenschr/Arduino-libraries/blob/master/ADXL345/examples/ADXL345_no_library/BareBones_ADXL345.pde)
+ * ADXL345 has STA (blue wire) on A4
+ *         and SCL (yellow wire) on A5
  *
  */
+// Feature Selection
+//#define ANALOGUE_ACCEL 1   // Use Analogue Accelerometer
+
+
 #include <stdint.h>
 #include <math.h>     // for sqrt function.
 #include <ffft.h>
 #include <Time.h>
 #include <Wire.h>
+#ifndef ANALOGUE_ACCEL
 #include <ADXL345.h>   // Accelerometer
+#endif
 #include <DS1307RTC.h> // Real Time Clock
 #include <Fat16.h>     // SD Card
 #include <Fat16util.h> // AD Card memory utilities.
 #include <memUtils.h>
+
 
 // General Settings
 static int pinXNo = 0;   // ADC Channel to capture
@@ -80,6 +89,9 @@ unsigned long mon_lastreset_millis = 0;   // time the value fell below the alarm
 unsigned long mon_thresh_millis = 0;  // time that the alarm threshold was exceeded.
 unsigned long last_log_millis = 0;    // time we last wrote data to the SD card
 
+// Flag to tell us it is time to collect some data
+boolean need_data = false;
+
 // Buffers for the Fast Fourier Transform code.
 volatile byte position = 0;
 int16_t capture[FFT_N];       // Capture Buffer
@@ -90,8 +102,10 @@ uint16_t spectrum[FFT_N/2];   // Output buffer
 SdCard sdCard;
 Fat16 logfile;
 
+#ifndef ANALOGUE_ACCEL
 // Buffer for the accelerometer
 ADXL345 accel;
+#endif
 
 // store error strings in flash to save RAM - uses Fat16Util
 #define error(s) error_P(PSTR(s))
@@ -109,6 +123,8 @@ void error_P(const char* str) {
 
 void setup()
 {
+  int i,x,y,z;
+  double gains[3];
   Serial.begin(9600);
   //establishContact();
   Serial.println(memoryFree());
@@ -119,9 +135,37 @@ void setup()
   else
      PgmPrintln("RTC has set the system time");      
 
+  #ifndef ANALOGUE_ACCEL
   // Initialise accelerometer
-  //accel.powerOn();
+  PgmPrintln("Powering on I2C Accelerometer");
+  accel.powerOn();
+  accel.setRangeSetting(2);
+  accel.getAxisGains(gains);
+  Serial.println("gains_orig[]:");
+  for(i = 0; i < 3; i++){
+    Serial.print(gains[i], 6);
+    Serial.print(" ");
+  }
+  Serial.println("");
+  gains[0] = 1; gains[1] = 1; gains[2] = 1;
+  accel.setAxisGains(gains);
+  accel.getAxisGains(gains);
+  Serial.println("gains[]:");
+  for(i = 0; i < 3; i++){
+    Serial.print(gains[i], 6);
+    Serial.print(" ");
+  }
+  Serial.println("");
+  accel.readAccel(&x, &y, &z);
+  Serial.print("XYZ COUNTS: ");
+  Serial.print(x, DEC);
+  Serial.print(" ");
+  Serial.print(y, DEC);
+  Serial.print(" ");
+  Serial.print(z, DEC);
+  Serial.println("");
   // might want to adjust gains here with accel.setAxisGains
+  #endif
 
    // Initialise audio output.
    pinMode(AUDIO_ALARM_PIN, OUTPUT);
@@ -164,21 +208,13 @@ void setup()
 ////////////////////////////////////////////////////////
 // Interrupt service routine - called regularly to collect
 // data and store in FFT capture buffer.
+// All this does is set a flag to tell us to collect some data
+// the actual work is done in loop() because the arduino
+// crashes if I use I2C inside this routine.
 //
 ISR(TIMER1_COMPA_vect)          // timer compare interrupt service routine
 {
-  int x,y,z;
-  // Do nothing if we are at the end of the capture buffer.
-  if (position >= FFT_N)
-    return;
-  x = analogRead(pinXNo);
-  y = analogRead(pinYNo);
-  z = analogRead(pinZNo);
-  capture[position] = (x+y+z)/3;
-  //accel.readAccel(&x,&y,&z);
-  //capture[position] = (int)sqrt(x*x+y*y+z*z);
-  //capture[position] = x+y+z;
-  position++;
+  need_data = true;
 }
 
 void digitalClockDisplay(){
@@ -233,6 +269,29 @@ void printDigits(int digits){
 void loop()
 {
   int i, maxChan;
+  int x,y,z;
+
+  if (need_data) {
+    // Do nothing if we are at the end of the capture buffer.
+    if (position >= FFT_N)
+      return;
+    #ifdef ANALOGUE_ACCEL
+    // Read acceleration from analogue input pins
+    x = analogRead(pinXNo);
+    y = analogRead(pinYNo);
+    z = analogRead(pinZNo);
+    #else
+    // Read acceleration from I2C bus device.
+    accel.readAccel(&x,&y,&z);
+    #endif
+    capture[position] = (x+y+z)/3;
+   //capture[position] = (int)sqrt(x*x+y*y+z*z);
+    //capture[position] = x+y+z;
+    position++;
+    need_data = false;
+  }
+
+
   // See if the FFT capture buffer is full.
   // If so, process data.
   if (position == FFT_N) {
