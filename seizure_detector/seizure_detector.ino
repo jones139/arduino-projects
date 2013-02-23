@@ -46,7 +46,13 @@
  *
  */
 // Feature Selection
-//#define ANALOGUE_ACCEL 1   // Use Analogue Accelerometer
+#define ANALOGUE_ACCEL 1   // Use Analogue Accelerometer
+#define EXTERNAL_VREF 1    // use external VREF to improve
+                            // sensitivity of analogue acccel.
+
+#define USE_X 0       // Which axes to include in accel calculation.
+#define USE_Y 0
+#define USE_Z 1
 
 
 #include <stdint.h>
@@ -72,13 +78,13 @@ static int AUDIO_ALARM_PIN = 4;  // digital pin for the audio alarm (connect buz
 static int freq = 64;  // sample frequency (Hz) (128 samples = 1 second collection)
 #define LOGFN "SEIZURE.CSV"
 
-static int mon_freq_ch_min = 6;   // min channel to monitor - monitor channel 7-10.
-static int mon_freq_ch_max = 10;  // max channel to monitor
-static int mon_thresh  = 5; // Alarm threshold
+static int mon_freq_ch_min = 5;   // min channel to monitor - monitor channel 7-10.
+static int mon_freq_ch_max = 8;  // max channel to monitor
+static int mon_thresh  = 10; // Alarm threshold
 static unsigned long mon_warn_millis = 2000; // alarm level must continue for this time to raise warning.
 static unsigned long mon_alarm_millis = 5000; // alarm level must continue for this time to raise full alarm.
 static unsigned long mon_reset_millis = 2000;
-static unsigned long log_millis = 60000;       // SD card logging period.
+static unsigned long log_millis = 1000;       // SD card logging period.
 
 // Variables for alarms
 boolean mon_thresh_exceeded = false;
@@ -135,8 +141,14 @@ void setup()
   else
      PgmPrintln("RTC has set the system time");      
 
-  #ifndef ANALOGUE_ACCEL
-  // Initialise accelerometer
+  #ifdef ANALOGUE_ACCEL
+  // intialise analogue accelerometer
+  if (EXTERNAL_VREF)
+    analogReference(EXTERNAL);
+  else
+    analogReference(DEFAULT);
+  #else
+  // Initialise digital accelerometer
   PgmPrintln("Powering on I2C Accelerometer");
   accel.powerOn();
   accel.setRangeSetting(2);
@@ -252,7 +264,7 @@ void digitalClockLog(){
 void printDigitsLog(int digits) {
  // utility function for digital clock display: prints preceding colon and leading 0
   if(digits < 10)
-    PgmPrint("0");
+    logfile.print("0");
   logfile.print(digits);
 }
 
@@ -284,7 +296,7 @@ void loop()
     // Read acceleration from I2C bus device.
     accel.readAccel(&x,&y,&z);
     #endif
-    capture[position] = (x+y+z)/3;
+    capture[position] = (USE_X*x+USE_Y*y+USE_Z*z)/(USE_X+USE_Y+USE_Z);
    //capture[position] = (int)sqrt(x*x+y*y+z*z);
     //capture[position] = x+y+z;
     position++;
