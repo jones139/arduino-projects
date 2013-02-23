@@ -44,15 +44,16 @@ while True:
 	if (len(samples)>=nSamples):
 		print "analysis time!"
 		sample_array = numpy.array(samples)
-		sample_fft = scipy.fft(samples)
+		sample_fft = numpy.fft.rfft(samples)
 		offt = open('outfile_fft.dat','w')
 		freqs = []
 		times = []
 		sample_no = []
 		sn = 0
 		freqBinWidth = 1.0*sampleFreq/len(samples)
-		for x in range(len(sample_fft)):
+		for x in range(len(samples)):
 			times.append(1.0*x/sampleFreq)
+		for x in range(len(sample_fft)):
 			freq = 1.0*x*freqBinWidth
 			freqs.append(freq)
 			sample_no.append(sn)
@@ -76,8 +77,8 @@ while True:
 		pylab.plot(freqs,sample_fft)
 		pylab.xlabel("freq (Hz)")
 		pylab.ylabel("amplitude")
-		pylab.xlim(0,freqs[len(sample_fft)/2])
-		pylab.ylim(0)
+		#pylab.xlim(0,freqs[len(sample_fft)])
+		#pylab.ylim(0)
 		#pylab.xlim(0,100)
 		pylab.show()
 		t_start = time.time()
