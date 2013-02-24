@@ -12,16 +12,23 @@ import alsaaudio, time, audioop
 import time
 import numpy, scipy, scipy.fftpack
 import pylab
+import sys
 
-sampleFreq = 100   # Hz
+audioSampleFreq = 8000 # Hz  (sound card sample freq)
+sampleFreq = 100   # Hz   (frequency that we record samples for analysis).
 samplePeriod = 10   # sec
+rolAvWidth = 3      # take rolling average over 3 samples.
 nSamples = sampleFreq * samplePeriod
 
-inp = alsaaudio.PCM(alsaaudio.PCM_CAPTURE,alsaaudio.PCM_NONBLOCK)
+nRawSamples = int(audioSampleFreq/sampleFreq)  # number of raw samples per analysed sample.
+print "nSamples = %d\n" % (nSamples)
+print "nRawSamples = %d\n" % (nRawSamples)
+
 
 # Set attributes: Mono, 8000 Hz, 16 bit little endian samples
+inp = alsaaudio.PCM(alsaaudio.PCM_CAPTURE,alsaaudio.PCM_NONBLOCK)
 inp.setchannels(1)
-inp.setrate(sampleFreq)
+inp.setrate(audioSampleFreq)
 inp.setformat(alsaaudio.PCM_FORMAT_S16_LE)
 
 # The period size controls the internal number of frames per period.
@@ -36,15 +43,16 @@ inp.setperiodsize(160)
 analysis_period = samplePeriod    # seconds
 t_start = time.time()
 samples = [];
+raw_samples = []
+raw_samples_buf = []
 counter = 0
-
 while True:
 	# Collect data for analysis_period seconds, then analyse it.
 	#if ((time.time()-t_start) > analysis_period):
 	if (len(samples)>=nSamples):
 		print "analysis time!"
 		sample_array = numpy.array(samples)
-		sample_fft = numpy.fft.rfft(samples)
+		sample_fft = abs(numpy.fft.rfft(samples)) # throw away imaginary bit
 		offt = open('outfile_fft.dat','w')
 		freqs = []
 		times = []
@@ -69,15 +77,18 @@ while True:
 
 		#freqs = scipy.fftpack.fftfreq(signal.size, t[1]-t[0])
 
-		pylab.subplot(211)
+		pylab.subplot(311)
+		pylab.plot(raw_samples)
+		pylab.subplot(312)
 		pylab.plot(times, samples)
 		pylab.xlabel("time (s)")
 		pylab.ylabel("value");
-		pylab.subplot(212)
+		pylab.subplot(313)
 		pylab.plot(freqs,sample_fft)
 		pylab.xlabel("freq (Hz)")
 		pylab.ylabel("amplitude")
 		#pylab.xlim(0,freqs[len(sample_fft)])
+		pylab.xlim(0,10)
 		#pylab.ylim(0)
 		#pylab.xlim(0,100)
 		pylab.show()
@@ -87,17 +98,13 @@ while True:
 		l,data = inp.read()
 		counter = 0
 		if l:
-			#print "processing data"
-			#print data
-			while 1:
-				try:
-					samples.append(audioop.getsample(data,2,counter))
-					counter += 1
-				except:
-					#print "counter = %d" % (counter)
-					#print "end of data"
-					break
-			# Return the maximum of the absolute value of all samples in a fragment.
-			#print samples
-			print audioop.max(data, 2)
-			#time.sleep(.001)
+			for n in range(l):
+				raw_samples_buf.append(audioop.getsample(data,2,n))
+			# we only save the maximum for analysis.
+			#print "len_raw_samples_buf = %d, len_samples = %d, len_raw_samples = %d" % (len(raw_samples_buf),len(samples),len(raw_samples))
+			if (len(raw_samples_buf)>=nRawSamples):
+				samples.append(max(raw_samples_buf))
+				raw_samples.extend(raw_samples_buf)
+				raw_samples_buf = []
+			sys.stdout.write('.')
+			sys.stdout.flush()
