@@ -87,6 +87,8 @@ while True:
 		pylab.xlabel("time (s)")
 		pylab.ylabel("value");
 		pylab.subplot(313)
+		# Throw away the DC component to help with scaling the graph.
+		sample_fft[0]=sample_fft[1]
 		pylab.plot(freqs,sample_fft)
 		pylab.xlabel("freq (Hz)")
 		pylab.ylabel("amplitude")
