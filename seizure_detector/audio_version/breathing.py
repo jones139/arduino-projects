@@ -14,6 +14,9 @@ import numpy, scipy, scipy.fftpack
 import pylab
 import sys
 
+for card in alsaaudio.cards():
+	print card
+
 audioSampleFreq = 8000 # Hz  (sound card sample freq)
 sampleFreq = 100   # Hz   (frequency that we record samples for analysis).
 samplePeriod = 10   # sec
