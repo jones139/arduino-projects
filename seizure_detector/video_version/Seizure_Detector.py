@@ -38,7 +38,7 @@ def getSpectra(imgList):
     # Create a matrix with pixel values in the y direction, and time (frame no)
     # in the x direction.   This means we can do an FFT on each row to get
     # frequency components of each pixel.
-    dataMat = cv.CreateMat(len(imgList),nPixels,cv.CV_8UC1)
+    dataMat = cv.CreateMat(nPixels,len(imgList),cv.CV_8UC1)
     for frameNo in range(len(imgList)):
         for y in range(height-1):
             for x in range(width-1):
@@ -50,6 +50,9 @@ def getSpectra(imgList):
     
     print dataMat
     cv.ShowImage(window3,dataMat)
+
+    fftMat = cv.CreateMat(nPixels,len(imgList),cv.CV_8UC1)
+
 
 def doPyrDown(inImg):
     """
