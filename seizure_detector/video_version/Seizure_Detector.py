@@ -3,11 +3,14 @@
 import cv
 import datetime
 
-IMG_STACK_LEN = 60
-ANALYSIS_LAYER = 6
+IMG_STACK_LEN = 100
+ANALYSIS_LAYER = 5
+FFT_CHAN_MIN = 2
+FFT_CHAN_MAX = 20
 window1 = "Current"
 window2 = "Oldest"
 window3 = "Time Data"
+window4 = "Fourier Transform"
 imgList = []
 
 def preProcessImage(inImg):
@@ -38,20 +41,37 @@ def getSpectra(imgList):
     # Create a matrix with pixel values in the y direction, and time (frame no)
     # in the x direction.   This means we can do an FFT on each row to get
     # frequency components of each pixel.
-    dataMat = cv.CreateMat(nPixels,len(imgList),cv.CV_8UC1)
+    dataMat = cv.CreateMat(nPixels,len(imgList),cv.CV_32FC1)
     for frameNo in range(len(imgList)):
         for y in range(height-1):
             for x in range(width-1):
                 pixelNo = y*width+x
-                pixelVal = imgList[frameNo][1][y,x]
-                #print "frameNo=%d, x=%d, y=%d, pixelNo = %d, pixelVal = %d" % \
-                #    (frameNo,x,y,pixelNo, pixelVal)
+                pixelVal = float(imgList[frameNo][1][y,x]/255.0)
                 dataMat[pixelNo,frameNo] = pixelVal
     
-    print dataMat
     cv.ShowImage(window3,dataMat)
 
-    fftMat = cv.CreateMat(nPixels,len(imgList),cv.CV_8UC1)
+    fftMat = cv.CreateMat(nPixels,len(imgList),cv.CV_32FC1)
+    (a,fftMax,b,c)= cv.MinMaxLoc(fftMat)
+    #print "fftMax=%f" % (fftMax)
+    fftMat_int = cv.CreateMat(nPixels,len(imgList),cv.CV_8UC1)
+
+    cv.DFT(dataMat,fftMat,cv.CV_DXT_ROWS)
+    cv.ConvertScale(fftMat,fftMat_int,1000)
+    cv.ShowImage(window4,fftMat_int)
+
+    # Apply frequency filter to FFT data
+    for x in range(0,FFT_CHAN_MIN):
+        for y in range(0,nPixels):
+            fftMat[y,x] = 0.0
+
+    for x in range(FFT_CHAN_MAX,len(imgList)-1):
+        for y in range(0,nPixels):
+            fftMat[y,x] = 0.0
+            
+    (a,fftMax,b,c)= cv.MinMaxLoc(fftMat)
+    print "fftMax=%f (filtered region)" % (fftMax)
+
 
 
 def doPyrDown(inImg):
@@ -70,7 +90,8 @@ def main():
     """
     Main program - controls grabbing images from video stream and loops around each frame.
     """
-    camera = cv.CaptureFromFile("rtsp://192.168.1.18/live_mpeg4.sdp")
+    #camera = cv.CaptureFromFile("rtsp://192.168.1.18/live_mpeg4.sdp")
+    camera = cv.CaptureFromCAM(0)
     if (camera!=None):
         cv.NamedWindow(window1,cv.CV_WINDOW_AUTOSIZE)
         origImg = cv.QueryFrame(camera)
@@ -82,7 +103,6 @@ def main():
                 (lastTime,
                  preProcessImage(origImg)
                  ))
-            print "Number of Frames = %d" % (len(imgList))
             # Drop the oldest image off the list if we have enough in the list.
             if (len(imgList)>IMG_STACK_LEN):
                 imgList.pop(0)  # Remove first item
