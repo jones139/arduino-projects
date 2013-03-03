@@ -1,1 +1,0 @@
-/home/graham/arduino-projects/seizure_detector/video_version/CMakeFiles/sd.dir
