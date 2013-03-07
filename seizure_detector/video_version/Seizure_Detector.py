@@ -4,9 +4,10 @@ import cv
 import datetime
 
 IMG_STACK_LEN = 100
-ANALYSIS_LAYER = 5
+ANALYSIS_LAYER = 6
 FFT_CHAN_MIN = 2
 FFT_CHAN_MAX = 20
+inputfps     = 30
 window1 = "Current"
 window2 = "Oldest"
 window3 = "Time Data"
@@ -91,7 +92,8 @@ def main():
     Main program - controls grabbing images from video stream and loops around each frame.
     """
     #camera = cv.CaptureFromFile("rtsp://192.168.1.18/live_mpeg4.sdp")
-    camera = cv.CaptureFromCAM(0)
+    camera = cv.CaptureFromFile("testcards/testcard.mpg")
+    #camera = cv.CaptureFromCAM(0)
     if (camera!=None):
         cv.NamedWindow(window1,cv.CV_WINDOW_AUTOSIZE)
         origImg = cv.QueryFrame(camera)
@@ -107,13 +109,7 @@ def main():
             if (len(imgList)>IMG_STACK_LEN):
                 imgList.pop(0)  # Remove first item
                 
-            # Note - there is something odd about this time calculation
-            # it does not seem to be consistent with the timestamps on the
-            # images.
-            timeDiff = (datetime.datetime.now() - lastTime).total_seconds() 
-            fps = 1./timeDiff
-            print "timeDiff=%f, fps=%f fps" % (timeDiff,fps)
-
+ 
             cv.ShowImage(window1,origImg)
             cv.ShowImage(window2,imgList[0][1])
             cv.WaitKey(1) # This is very important or ShowImage doesn't work!!
@@ -122,6 +118,18 @@ def main():
                 # imgList[] is now a list of tuples (time,image) containing the
                 # reduced size images -
                 spectra = getSpectra(imgList)
+
+            timeDiff = (datetime.datetime.now() - lastTime).total_seconds() 
+            if (timeDiff<1./inputfps):
+                print "timediff=%f, 1/fps=%f" % (timeDiff,1./inputfps)
+                cv.WaitKey(1+int(1000.*(1./inputfps - timeDiff)))
+
+            # Note - there is something odd about this time calculation
+            # it does not seem to be consistent with the timestamps on the
+            # images.
+            timeDiff = (datetime.datetime.now() - lastTime).total_seconds() 
+            fps = 1./timeDiff
+            print "timeDiff=%f, fps=%f fps" % (timeDiff,fps)
 
             # Now get a new frame ready to start the loop again
             origImg = cv.QueryFrame(camera)
