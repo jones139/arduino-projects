@@ -19,8 +19,10 @@ for card in alsaaudio.cards():
 
 audioSampleFreq = 8000 # Hz  (sound card sample freq)
 samplePeriod = 1   # sec
+historyLen = 30 #sec
 nSamples = audioSampleFreq * samplePeriod
 
+freqHistory = []
 print "nSamples = %d\n" % (nSamples)
 
 
@@ -49,18 +51,26 @@ pylab.ion()
 fig = pylab.figure()
 ax1 = fig.add_subplot(211)
 ax2 = fig.add_subplot(212)
+fig2 = pylab.figure()
+ax3 = fig2.add_subplot(111)
 timeChart = None
 freqChart = None
+im = None
 while True:
 	# Collect data for analysis_period seconds, then analyse it.
 	#if ((time.time()-t_start) > analysis_period):
-	if (len(samples)>=nSamples):
+	if(len(freqHistory)>=historyLen):
+		del freqHistory[0]
+	elif (len(samples)>=nSamples):
 		print "analysis time!"
 		if (len(samples)>nSamples):
 			del samples[nSamples:]
 			print "samples truncated to %d records" % (len(samples))
 		sample_array = numpy.array(samples)
 		sample_fft = abs(numpy.fft.rfft(samples)) # throw away imaginary bit
+		freqHistory.append(sample_fft) # save for future analysis.
+
+
 		freqs = []
 		times = []
 		sample_no = []
@@ -92,6 +102,7 @@ while True:
 		# Throw away the DC component to help with scaling the graph.
 		sample_fft[0]=sample_fft[1]
 		if (freqChart==None):
+			pylab.xlim(0,1000)
 			freqChart, = ax2.plot(freqs,sample_fft)
 			pylab.xlabel("freq (Hz)")
 			pylab.ylabel("amplitude")
@@ -99,6 +110,29 @@ while True:
 			freqChart.set_xdata(freqs)
 			freqChart.set_ydata(sample_fft)
 		fig.canvas.draw()
+
+		# Plot the 2d map of frequency history
+		imgx = len(freqHistory)
+		imgy = len(freqHistory[0])
+		print "imgx=%d, imgy=%d" % (imgx,imgy)
+		imgArr = numpy.zeros(shape=(imgy,imgx))
+		for x in range(0,imgx):
+			for y in range(0,imgy):
+				imgArr[y,x] = freqHistory[x][y]
+		print "plotting image"
+		if (im==None):
+			pylab.xlabel("time (sec)")
+			pylab.ylabel("freq (Hz)")
+			pylab.xlim(0,historyLen)
+			pylab.ylim(0,1000)
+			im = ax3.imshow(imgArr,aspect='auto')
+			im.set_cmap('prism')
+		else:
+			im = ax3.imshow(imgArr,aspect='auto')
+		#			im.set_array(imgArr)
+		fig2.canvas.draw()
+
+
 		t_start = time.time()
 		samples = []
 	else:
