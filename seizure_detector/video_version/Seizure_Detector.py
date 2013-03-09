@@ -7,6 +7,7 @@ IMG_STACK_LEN = 100
 ANALYSIS_LAYER = 6
 FFT_CHAN_MIN = 2
 FFT_CHAN_MAX = 20
+FREQ_THRESH = 0.1
 inputfps     = 30
 window1 = "Current"
 window2 = "Oldest"
@@ -69,10 +70,22 @@ def getSpectra(imgList):
     for x in range(FFT_CHAN_MAX,len(imgList)-1):
         for y in range(0,nPixels):
             fftMat[y,x] = 0.0
-            
-    (a,fftMax,b,c)= cv.MinMaxLoc(fftMat)
-    print "fftMax=%f (filtered region)" % (fftMax)
 
+    return fftMat
+
+def pixelNo2xy(pixelNo,img):
+    (width,height) = cv.GetSize(img)
+    y = int(pixelNo / width)
+    x = pixelNo - y*width
+    return (x,y)
+
+def getEquivLoc(x,y,layer):
+    """ Returns the equivalent location to x,y in a different layer.
+    """
+    xl = x*2**(layer-1)
+    yl = y*2**(layer-1)
+    print "getEquivLoc(%d,%d,%d) -> (%d,%d)" % (x,y,layer,xl,yl)
+    return (xl,yl)
 
 
 def doPyrDown(inImg):
@@ -110,14 +123,28 @@ def main():
                 imgList.pop(0)  # Remove first item
                 
  
-            cv.ShowImage(window1,origImg)
-            cv.ShowImage(window2,imgList[0][1])
-            cv.WaitKey(1) # This is very important or ShowImage doesn't work!!
-           
+            xorig = 0
+            yorig = 0
             if (len(imgList) == IMG_STACK_LEN):
                 # imgList[] is now a list of tuples (time,image) containing the
                 # reduced size images -
                 spectra = getSpectra(imgList)
+                binWidth = 1/inputfps/len(imgList)
+                #(a,fftMax,b,(freqNo,pixelNo))= cv.MinMaxLoc(spectra)
+                for freqNo in range(0,int(len(imgList)/2)):
+                    for pixelNo in range(0,70):
+                        print spectra
+                        print "freqNo=%d, pixelNo=%d" % (freqNo,pixelNo)
+                        if (spectra[pixelNo][freqNo]>FREQ_THRESH):
+                            (xmax,ymax) = pixelNo2xy(pixelNo,imgList[0][1])
+                            (xorig,yorig) = getEquivLoc(xmax,ymax,ANALYSIS_LAYER)
+                            print "(%d,%d) (%d,%d)" % (xmax,ymax,xorig,yorig)
+                            cv.Circle(origImg, (xorig,yorig), 30, cv.Scalar(255,1,1), thickness=1, lineType=-1, shift=0) 
+
+            cv.ShowImage(window1,origImg)
+            cv.ShowImage(window2,imgList[0][1])
+            cv.WaitKey(1) # This is very important or ShowImage doesn't work!!
+                
 
             timeDiff = (datetime.datetime.now() - lastTime).total_seconds() 
             if (timeDiff<1./inputfps):
