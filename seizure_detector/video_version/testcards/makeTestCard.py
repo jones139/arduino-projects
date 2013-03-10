@@ -12,8 +12,8 @@ fps = 30
 videoFormat = cv.FOURCC('p','i','m','1')
 videoLen = 120 # seconds
 
-size = 10 # pixels
-ampl = 10 # pixels
+size = 30 # pixels
+ampl = 30 # pixels
 
 
 def main():

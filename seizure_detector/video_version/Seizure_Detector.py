@@ -2,18 +2,28 @@
 
 import cv
 import datetime
+import numpy, scipy, scipy.fftpack
+import pylab
 
 IMG_STACK_LEN = 100
 ANALYSIS_LAYER = 6
-FFT_CHAN_MIN = 2
+FFT_CHAN_MIN = 3
 FFT_CHAN_MAX = 20
-FREQ_THRESH = 0.1
-inputfps     = 30
+FREQ_THRESH = 0.50
+inputfps     = 15
 window1 = "Current"
 window2 = "Oldest"
 window3 = "Time Data"
 window4 = "Fourier Transform"
 imgList = []
+cv.NamedWindow(window2,cv.CV_WINDOW_NORMAL)
+fig = pylab.figure()
+ax1 = fig.add_subplot(211)
+ax2 = fig.add_subplot(212)
+fig.canvas.draw()
+freqChart = None
+pylab.ion()
+
 
 def preProcessImage(inImg):
     """
@@ -27,6 +37,30 @@ def preProcessImage(inImg):
     return(outImg)
 # End of preProcessImage
 
+def doPlot(fftMat):
+    global freqChart,ax1,ax2,fig
+    pixelNo = 58
+    sampleFft = []
+    freqs = []
+    freqBinWidth = 1.0*inputfps/IMG_STACK_LEN
+    for x in range(IMG_STACK_LEN):
+        freq = 1.0*x*freqBinWidth
+        freqs.append(freq)
+        sampleFft.append(fftMat[pixelNo,x])
+
+    # Throw away the DC component to help with scaling the graph.
+    #    sample_fft[0]=sample_fft[1]
+    if (freqChart==None):
+        pylab.xlim(0,50)
+        freqChart, = ax2.plot(freqs,sampleFft)
+        pylab.xlabel("freq (Hz)")
+        pylab.ylabel("amplitude")
+    else:
+        freqChart.set_xdata(freqs)
+        freqChart.set_ydata(sampleFft)
+    fig.canvas.draw()
+    print "doPlot done"
+
 def getSpectra(imgList):
     """ Calculates the fourier transforms (against time) of all pixels in
     imgList.
@@ -37,8 +71,8 @@ def getSpectra(imgList):
     """
     (width,height) = cv.GetSize(imgList[0][1])
     nPixels = width * height
-    print "Image Size = (%d x %d) - %d pixels.  Number of Images = %d" \
-        %  (width,height,nPixels,len(imgList))
+    #print "Image Size = (%d x %d) - %d pixels.  Number of Images = %d" \
+    #    %  (width,height,nPixels,len(imgList))
 
     # Create a matrix with pixel values in the y direction, and time (frame no)
     # in the x direction.   This means we can do an FFT on each row to get
@@ -54,7 +88,7 @@ def getSpectra(imgList):
     cv.ShowImage(window3,dataMat)
 
     fftMat = cv.CreateMat(nPixels,len(imgList),cv.CV_32FC1)
-    (a,fftMax,b,c)= cv.MinMaxLoc(fftMat)
+    #(a,fftMax,b,c)= cv.MinMaxLoc(fftMat)
     #print "fftMax=%f" % (fftMax)
     fftMat_int = cv.CreateMat(nPixels,len(imgList),cv.CV_8UC1)
 
@@ -67,24 +101,26 @@ def getSpectra(imgList):
         for y in range(0,nPixels):
             fftMat[y,x] = 0.0
 
-    for x in range(FFT_CHAN_MAX,len(imgList)-1):
-        for y in range(0,nPixels):
-            fftMat[y,x] = 0.0
+    #for x in range(FFT_CHAN_MAX,len(imgList)-1):
+    #    for y in range(0,nPixels):
+    #        fftMat[y,x] = 0.0
+
+    doPlot(fftMat)
 
     return fftMat
 
 def pixelNo2xy(pixelNo,img):
     (width,height) = cv.GetSize(img)
-    y = int(pixelNo / width)
-    x = pixelNo - y*width
+    y = int(pixelNo / (width-1))
+    x = pixelNo - y*(width-1)
     return (x,y)
 
 def getEquivLoc(x,y,layer):
     """ Returns the equivalent location to x,y in a different layer.
     """
-    xl = x*2**(layer-1)
-    yl = y*2**(layer-1)
-    print "getEquivLoc(%d,%d,%d) -> (%d,%d)" % (x,y,layer,xl,yl)
+    xl = int((x+1)*2**(layer))
+    yl = int((y+0.5)*2**(layer))
+    #print "getEquivLoc(%d,%d,%d) -> (%d,%d)" % (x,y,layer,xl,yl)
     return (xl,yl)
 
 
@@ -104,10 +140,15 @@ def main():
     """
     Main program - controls grabbing images from video stream and loops around each frame.
     """
-    #camera = cv.CaptureFromFile("rtsp://192.168.1.18/live_mpeg4.sdp")
-    camera = cv.CaptureFromFile("testcards/testcard.mpg")
+    camera = cv.CaptureFromFile("rtsp://192.168.1.18/live_mpeg4.sdp")
+    #camera = cv.CaptureFromFile("testcards/testcard.mpg")
     #camera = cv.CaptureFromCAM(0)
     if (camera!=None):
+        frameSize = (640,480)
+        #fps = 30
+        videoFormat = cv.FOURCC('p','i','m','1')
+        vw = cv.CreateVideoWriter("seizure_test.mpg",videoFormat, inputfps,frameSize,1)
+
         cv.NamedWindow(window1,cv.CV_WINDOW_AUTOSIZE)
         origImg = cv.QueryFrame(camera)
         lastTime = datetime.datetime.now()
@@ -129,18 +170,28 @@ def main():
                 # imgList[] is now a list of tuples (time,image) containing the
                 # reduced size images -
                 spectra = getSpectra(imgList)
-                binWidth = 1/inputfps/len(imgList)
+                binWidth = 1.0*inputfps/IMG_STACK_LEN
                 #(a,fftMax,b,(freqNo,pixelNo))= cv.MinMaxLoc(spectra)
                 for freqNo in range(0,int(len(imgList)/2)):
                     for pixelNo in range(0,70):
-                        print spectra
-                        print "freqNo=%d, pixelNo=%d" % (freqNo,pixelNo)
-                        if (spectra[pixelNo][freqNo]>FREQ_THRESH):
+                        if (abs(spectra[pixelNo,freqNo])>FREQ_THRESH):
+                            print "PixelNo %d exceeds threshold (val=%f) in freq bin %d (%f Hz" % (pixelNo,abs(spectra[pixelNo,freqNo]),freqNo,freqNo*binWidth)
                             (xmax,ymax) = pixelNo2xy(pixelNo,imgList[0][1])
                             (xorig,yorig) = getEquivLoc(xmax,ymax,ANALYSIS_LAYER)
-                            print "(%d,%d) (%d,%d)" % (xmax,ymax,xorig,yorig)
-                            cv.Circle(origImg, (xorig,yorig), 30, cv.Scalar(255,1,1), thickness=1, lineType=-1, shift=0) 
-
+                            if (freqNo<10):
+                                colour = cv.Scalar(255,1,1)
+                                thickness = 1
+                            elif (freqNo>10 and freqNo<20):
+                                colour = cv.Scalar(1,255,1)
+                                thickness = 5
+                            elif (freqNo>20 and freqNo<30):
+                                colour = cv.Scalar(1,1,255)
+                                thickness = 10
+                            elif (freqNo>30):
+                                colour = cv.Scalar(255,255,255)
+                                thickness = 20
+                            cv.Circle(origImg, (xorig,yorig), 30, colour, thickness=thickness, lineType=-1, shift=0) 
+            cv.WriteFrame(vw,origImg)
             cv.ShowImage(window1,origImg)
             cv.ShowImage(window2,imgList[0][1])
             cv.WaitKey(1) # This is very important or ShowImage doesn't work!!
