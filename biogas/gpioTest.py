@@ -11,6 +11,7 @@ GPIO.setmode(GPIO.BCM)
 GPIO.setup(bubblePin, GPIO.IN)
 
 def bubbleDetected(channel):
+    global bubbleCount
     print("bubble detected")
     bubbleCount += 1
 
@@ -23,4 +24,4 @@ while True:
 #    else:
 #        print("True")
     print("Bubble Count = %d\n" % bubbleCount)
-    sleep(1000)
+    sleep(1)
