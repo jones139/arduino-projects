@@ -1,5 +1,12 @@
 #/usr/bin/python
 
+# Based on example found at:
+# http://rwsarduino.blogspot.co.uk/2014/12/python-plots-from-serial-input.html
+#
+# Needs some work because sometimes null bytes mess up the 'split' function
+# and it crashes.
+#
+
 import matplotlib.pyplot as plt
 import time
 import serial
