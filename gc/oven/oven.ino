@@ -19,6 +19,31 @@ int mode = 1; //mode 1 = proportional controller, mode 0 = simple thermostat
 int gain = 10; //constant, multiplied by tempDiff to give output
 int output = 0; //varies current, 0 = off, 255 = full power
 
+String readString;
+
+int parseCmd(String cmdLine, String *key,String *value) {
+  int equalsPos;
+  //String key;
+  //String value;
+  equalsPos = cmdLine.indexOf('=');
+  if (equalsPos==-1) {
+    *key=cmdLine;
+    *value="";
+  }
+  else {
+    *key=cmdLine.substring(0,equalsPos);
+    *value=cmdLine.substring(equalsPos+1);
+  }
+  //Serial.print("key=");
+  //Serial.println(*key);
+  //Serial.print("value=");
+  //Serial.println(*value);
+  //Serial.print("parseCmd: ");
+  //Serial.println(cmdLine); 
+  //Serial.println(equalsPos);
+  return(equalsPos);
+}
+
 
 
 ///////////////////////////////////////////////////////
@@ -36,6 +61,7 @@ void setup() {
 
 void loop() {
   int output;
+  String k,v;
 ///////////////////////////////////////////////////////
   // reset switch
 ///////////////////////////////////////////////////////
@@ -85,28 +111,28 @@ void loop() {
 ////////////////////////////////////////////////
   // respond to commands from serial.
 ////////////////////////////////////////////////
-  if (Serial.available())
-  {
-    char ch = Serial.read();
-    if (ch == 'u')
-    {
-      setpoint = setpoint + 1;
-      Serial.print ("setpoint increased to ");
-      Serial.println(setpoint);
-    } 
-    if (ch == 'd')
-    {
-      setpoint = setpoint - 1;
-      Serial.print ("setpoint decreased to ");
-      Serial.println(setpoint);
-    } 
-    if (ch == 'r')
-    {
-      setpoint = defaultSetpoint;
-      Serial.println ("setpoint reset");
+  while (Serial.available()) {
+    if (Serial.available() > 0) {
+      char c = Serial.read();
+      readString += c;
     }
 
   }
+  Serial.print (readString);
+  if (readString.length()>0) {
+    parseCmd(readString, &k,&v);
+    Serial.print("parseCmd k=");
+    Serial.println(k);
+    Serial.print("parseCmd v=");
+    Serial.println(v);
+    
+    if (k=="setpoint") {
+       Serial.println("Setpoint CHANGED");      
+    }
+    
+    readString = "";
+  }
+  
   //Serial.print(time-startMillis);
   Serial.print(time+1);
   Serial.print(",");
