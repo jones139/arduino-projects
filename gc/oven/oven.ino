@@ -118,18 +118,24 @@ void loop() {
     }
 
   }
-  Serial.print (readString);
+  Serial.println (readString);
   if (readString.length()>0) {
     parseCmd(readString, &k,&v);
-    Serial.print("parseCmd k=");
+    Serial.println("parseCmd k=");
     Serial.println(k);
-    Serial.print("parseCmd v=");
+    Serial.println("parseCmd v=");
     Serial.println(v);
     
-    if (k=="setpoint") {
-       Serial.println("Setpoint CHANGED");      
+    if (k=="setpoint") {    //change setpoint
+      setpoint = v.toInt();
     }
-    
+    if (k=="mode") {        //change mode, chose 1 (proportional controller) or 0 (simple thermostat)
+      mode = v.toInt();
+    }
+    if (k=="gain") {        //change gain
+      gain = v.toInt();
+    }
+
     readString = "";
   }
   
