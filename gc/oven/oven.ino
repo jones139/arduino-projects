@@ -19,14 +19,13 @@ int mode = 1; //mode 1 = proportional controller, mode 0 = simple thermostat
 int gain = 10; //constant, multiplied by tempDiff to give output
 int output = 0; //varies current, 0 = off, 255 = full power
 
-int serialOutput=0;
+int serialOutput=0;  // By default serial output of data is off, unti
+                      // 'start' command is issued by computer.
 
 String readString;
 
 int parseCmd(String cmdLine, String *key,String *value) {
   int equalsPos;
-  //String key;
-  //String value;
   equalsPos = cmdLine.indexOf('=');
   if (equalsPos==-1) {
     *key=cmdLine;
@@ -36,13 +35,6 @@ int parseCmd(String cmdLine, String *key,String *value) {
     *key=cmdLine.substring(0,equalsPos);
     *value=cmdLine.substring(equalsPos+1);
   }
-  //Serial.print("key=");
-  //Serial.println(*key);
-  //Serial.print("value=");
-  //Serial.println(*value);
-  //Serial.print("parseCmd: ");
-  //Serial.println(cmdLine); 
-  //Serial.println(equalsPos);
   return(equalsPos);
 }
 
@@ -65,9 +57,9 @@ void setup() {
 void loop() {
   int output;
   String k,v;
-///////////////////////////////////////////////////////
+  ///////////////////////////////////////////////////////
   // reset switch
-///////////////////////////////////////////////////////
+  ///////////////////////////////////////////////////////
   switchState = digitalRead(switchPin);
   if (switchState == HIGH) {
     digitalWrite(lightPin, LOW);
@@ -75,9 +67,9 @@ void loop() {
   if (switchState == LOW) {
     digitalWrite(lightPin, HIGH);
   }  
-/////////////////////////////////////////////////////////
+  /////////////////////////////////////////////////////////
   // read time and thermistor values and write to serial.
-/////////////////////////////////////////////////////////
+  /////////////////////////////////////////////////////////
   unsigned long time = millis();
   if (switchState == LOW) {
     startMillis = time;
@@ -85,12 +77,12 @@ void loop() {
   
 
 
-////////////////////////////////////////////////
+  ////////////////////////////////////////////////
   // temperature controller.
-////////////////////////////////////////////////
- int val = analogRead( therm );
- int val2 = analogRead( therm2 );
- int val3 = analogRead( therm3 );
+  ////////////////////////////////////////////////
+  int val = analogRead( therm );
+  int val2 = analogRead( therm2 );
+  int val3 = analogRead( therm3 );
   if (mode == 0) {  //simple thermostat
     if (val < setpoint) {  
       output = 255;
@@ -111,9 +103,9 @@ void loop() {
   }
   analogWrite (heaterPin,output);
   
-////////////////////////////////////////////////
+  ////////////////////////////////////////////////
   // respond to commands from serial.
-////////////////////////////////////////////////
+  ////////////////////////////////////////////////
 
   while (Serial.available()) {
     if (Serial.available() > 0) {
@@ -172,7 +164,8 @@ void loop() {
   //Serial.print(time-startMillis);
 
 if (serialOutput==1){
-  Serial.print(time+1);
+  Serial.print("data,");
+  Serial.print(time-startMillis);
   Serial.print(",");
   Serial.print(val);
   Serial.print(",");
