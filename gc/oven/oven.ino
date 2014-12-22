@@ -19,6 +19,8 @@ int mode = 1; //mode 1 = proportional controller, mode 0 = simple thermostat
 int gain = 10; //constant, multiplied by tempDiff to give output
 int output = 0; //varies current, 0 = off, 255 = full power
 
+int serialOutput=0;
+
 String readString;
 
 int parseCmd(String cmdLine, String *key,String *value) {
@@ -49,6 +51,7 @@ int parseCmd(String cmdLine, String *key,String *value) {
 ///////////////////////////////////////////////////////
 
 void setup() {                
+
   Serial.begin(9600);
 
   pinMode(heaterPin, OUTPUT);
@@ -111,6 +114,7 @@ void loop() {
 ////////////////////////////////////////////////
   // respond to commands from serial.
 ////////////////////////////////////////////////
+
   while (Serial.available()) {
     if (Serial.available() > 0) {
       char c = Serial.read();
@@ -118,37 +122,56 @@ void loop() {
     }
 
   }
-  Serial.println (readString);
-  if (readString.length()>0) {
-    parseCmd(readString, &k,&v);
-    Serial.print("parseCmd k=");
-    Serial.println(k);
-    Serial.print("parseCmd v=");
-    Serial.println(v);
-     
-if (v=="") {
-    if (k=="setpoint") {
-     Serial.println("setpoint=");
-     Serial.println(setpoint);
-    } 
-}
 
+    //Serial.println (readString);
+    if (readString.length()>0) {
+      parseCmd(readString, &k,&v);
+      Serial.print("parseCmd k=");
+      Serial.println(k);
+      Serial.print("parseCmd v=");
+      Serial.println(v);
+    
+    if (v=="") {
+      if (k=="setpoint") {
+        Serial.print("setpoint=");
+        Serial.println(setpoint);
+      }
+      if (k=="mode") {
+        Serial.print("mode=");
+        Serial.println(mode);
+      }
+      if (k=="gain") { 
+        Serial.print("gain=");
+        Serial.println(gain); 
+      }    
+      if (k=="start") {
+        serialOutput=1;
+      }
+      if (k=="stop") {
+        serialOutput=0;
+      }
+    }
+    
+    else {
+      if (k=="setpoint") {    //change setpoint
+        setpoint = v.toInt();
+      }
+      if (k=="mode") {        //change mode, chose 1 (proportional controller) or 0 (simple thermostat)
+        mode = v.toInt();
+      }
+      if (k=="gain") {        //change gain
+        gain = v.toInt();
+      }
 
-    if (k=="setpoint") {    //change setpoint
-      setpoint = v.toInt();
     }
-    if (k=="mode") {        //change mode, chose 1 (proportional controller) or 0 (simple thermostat)
-      mode = v.toInt();
-    }
-    if (k=="gain") {        //change gain
-      gain = v.toInt();
-    }
-  
-
+    
     readString = "";
-  }
+
+    }
   
   //Serial.print(time-startMillis);
+
+if (serialOutput==1){
   Serial.print(time+1);
   Serial.print(",");
   Serial.print(val);
@@ -161,6 +184,8 @@ if (v=="") {
   Serial.print(",");
   Serial.print(output);
   Serial.println();
+}
+  
   
   delay(1000);
 
