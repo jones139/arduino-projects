@@ -62,6 +62,22 @@ class WebServer():
         bottle.redirect("/")
         return "ok"
 
+    def setKp(self):
+        gain=int(bottle.request.query.setpoint)
+        print "setKp(%d)" % gain
+        self._ardCtrl.setKp(gain)
+        bottle.redirect("/")
+
+    def start(self):
+        self._ardCtrl.start()
+        bottle.redirect("/")
+        return "ok"
+
+    def stop(self):
+        self._ardCtrl.stop()
+        bottle.redirect("/")
+
+        
 
     def staticFiles(self,filepath):
         """ Used to serve the static files from the /static path"""
@@ -86,3 +102,6 @@ def setRoutes(app):
     bottle.route("/static/<filepath:path>")(app.staticFiles)
     bottle.route("/chartImg")(app.getChartImg)
     bottle.route("/setSetPoint")(app.setSetPoint)
+    bottle.route("/start")(app.start)    
+    bottle.route("/stop")(app.stop)   
+    bottle.route("/setKp")(app.setKp)

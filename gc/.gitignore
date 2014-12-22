@@ -1,0 +1,4 @@
+*.pyc
+*.ini
+www/out.png
+
