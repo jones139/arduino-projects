@@ -121,11 +121,19 @@ void loop() {
   Serial.println (readString);
   if (readString.length()>0) {
     parseCmd(readString, &k,&v);
-    Serial.println("parseCmd k=");
+    Serial.print("parseCmd k=");
     Serial.println(k);
-    Serial.println("parseCmd v=");
+    Serial.print("parseCmd v=");
     Serial.println(v);
-    
+     
+if (v=="") {
+    if (k=="setpoint") {
+     Serial.println("setpoint=");
+     Serial.println(setpoint);
+    } 
+}
+
+
     if (k=="setpoint") {    //change setpoint
       setpoint = v.toInt();
     }
@@ -135,6 +143,7 @@ void loop() {
     if (k=="gain") {        //change gain
       gain = v.toInt();
     }
+  
 
     readString = "";
   }
