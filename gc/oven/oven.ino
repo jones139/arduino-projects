@@ -45,7 +45,7 @@ int parseCmd(String cmdLine, String *key,String *value) {
 void setup() {                
 
   Serial.begin(9600);
-
+  startMillis = millis();
   pinMode(heaterPin, OUTPUT);
   pinMode(therm, INPUT);
   pinMode(switchPin, INPUT);

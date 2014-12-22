@@ -13,9 +13,11 @@ import matplotlib.pyplot as plt
 import time
 import serial
 
+MAXLEN = 300
+
 print "plotdaemon.py"
 print "Opening Serial Connection"
-ser = serial.Serial('/dev/ttyACM0',9600,timeout=1)
+ser = serial.Serial('/dev/ttyUSB0',9600,timeout=1)
 print "Waiting for serial comms to settle..."
 time.sleep(2)
 print "Reading first line of data, and ignoring it."
@@ -23,6 +25,10 @@ line = ser.readline() # throw away any part lines
 print "line=%s" % line
 print "Sending start command"
 ser.write(b'start')
+print "ignoring a few lines for start command to register..."
+for n in range(0,5):
+  line = ser.readline() # throw away any part lines
+  print "line=%s" % line
 
 while(ser.inWaiting() < 100): # make sure something is coming
   now = 0.0
@@ -45,7 +51,18 @@ while (ser.isOpen()):
     d3.append(float(mylist[4]))
     d4.append(float(mylist[5]))
     d5.append(float(mylist[6]))
-  #d6.append(float(mylist[7]))
+
+    #Trim the lists to avoid using up all the memory!
+    if (len(t)>MAXLEN):
+      #print len(t),t
+      del t[0:(len(t)-MAXLEN)]
+      #print len(t),t
+      del d1[0:(len(d1)-MAXLEN)]
+      del d2[0:(len(d2)-MAXLEN)]
+      del d3[0:(len(d3)-MAXLEN)]
+      del d4[0:(len(d4)-MAXLEN)]
+      del d5[0:(len(d5)-MAXLEN)]
+      
     if(ser.inWaiting() < 100): # redraw only if you are caught up
       plt.clf() # clear the figure
       plt.plot(t,d1) # plot a line for each set of data
