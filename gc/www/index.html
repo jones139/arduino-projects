@@ -4,39 +4,50 @@
 <script src="jquery-1.11.2.min.js"></script>
 </head>
 <body>
-<h1>Chromatograph Web Server</h1>
-<ul>
-<li><a href="/start">Start</a></li>
-<li><a href="/stop">Stop</a></li>
-<li><a href="/setSetPoint?setpoint=0">Heater Off</a></li>
-<li><a href="/setSetPoint?setpoint=800">Heater On (800)</a></li>
-</ul>
+<table width="100%" border="0">
+   <tr>
+      <td colspan="2" bgcolor="E0E0FF">
+         <h1>Chromatograph Web Server</h1>
+      </td>
+   </tr>
+   <tr valign="top">
+      <td bgcolor="E0E0FF" width="100">
+         <img id="chart" src="/static/out.png">
+      </td>
+      <td bgcolor="E0E0FF" width="50">
+         <form>
+         Change setpoint to : <input type="text" name="setpoint" id="setpoint" size="3" />
+         <input type="button" name="go" id="gobutton"  value="Go" />
+         </form>
+         <form>
+         Mode : <select name="dropdown">
+         <option value="Mode 0">Simple</option>
+         <option value="Mode 1" selected>PID</option>
+         </select>
+         </form>
+         Gains :
+         <form>
+         kp : <input type="text" name"kp" id="kp" size="3" />
+         <input type="button" name="go" id="gobutton"  value="Go" />
+         </form>
+         <form>
+         ki : <input type="text" name"ki" id="ki" size="3" />
+         <input type="button" name="go" id="gobutton"  value="Go" />
+         </form>
+         <form>
+         kd : <input type="text" name"kd" id="kd" size="3" />
+         <input type="button" name="go" id="gobutton"  value="Go" />
+         </form>
+      </td>
+   </tr>
 
-<form>
-Change setpoint to : <input type="text" name="setpoint" id="setpoint"/>
-<input type="button" name="go" id="gobutton"  value="Go" />
-</form>
-<form>
-Mode : <select name="dropdown">
-<option value="Mode 0">Simple</option>
-<option value="Mode 1" selected>PID</option>
-</select>
-</form>
-Gains :
-<form>
-kp : <input type="text" name"kp" id="kp"/>
-<input type="button" name="go" id="gobutton"  value="Go" />
-</form>
-<form>
-ki : <input type="text" name"ki" id="ki"/>
-<input type="button" name="go" id="gobutton"  value="Go" />
-</form>
-<form>
-kd : <input type="text" name"kd" id="kd"/>
-<input type="button" name="go" id="gobutton"  value="Go" />
-</form>
+   </tr>
+</table>
 
-<img id="chart" src="/static/out.png">
+
+
+
+
 
 <script>
 setpoint=function(){
