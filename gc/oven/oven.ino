@@ -16,11 +16,17 @@ int switchState = 0; //switch resets timer
 unsigned long startMillis = 0; //timer
 //proportional controller
 int mode = 1; //mode 1 = proportional controller, mode 0 = simple thermostat
-int gain = 10; //constant, multiplied by tempDiff to give output
+int kp = 10;
+int ki = 1;
+int kd = 1;//constant, multiplied by tempDiff to give output
 int output = 0; //varies current, 0 = off, 255 = full power
 
-int serialOutput=0;  // By default serial output of data is off, unti
+int serialOutput=0; // By default serial output of data is off, unti
                       // 'start' command is issued by computer.
+                      
+int preErr = 0;
+int integral = 0;
+int dt = 1;  //loop period (sec)
 
 String readString;
 
@@ -40,6 +46,8 @@ int parseCmd(String cmdLine, String *key,String *value) {
 
 
 
+
+
 ///////////////////////////////////////////////////////
 
 void setup() {                
@@ -51,6 +59,8 @@ void setup() {
   pinMode(switchPin, INPUT);
   pinMode(lightPin, OUTPUT);
   digitalWrite(switchPin, HIGH);  
+  preErr = 0;
+  integral = 0;
 }
 ///////////////////////////////////////////////////////
 
@@ -92,8 +102,12 @@ void loop() {
     }
   }
   if (mode == 1) {  //proportional controller
-    int tempDiff = setpoint-val;
-    output = tempDiff*gain;
+    int tempDiff = setpoint - val;
+    integral = integral + tempDiff * dt;
+    int derivative = (tempDiff - preErr) / dt;
+    output = tempDiff * kp + integral * ki + derivative * kd;
+    preErr = tempDiff;
+    
     if (output < 0) {
       output = 0;
     }   
@@ -132,15 +146,35 @@ void loop() {
         Serial.print("mode=");
         Serial.println(mode);
       }
-      if (k=="gain") { 
-        Serial.print("gain=");
-        Serial.println(gain); 
+      if (k=="kp") { 
+        Serial.print("kp=");
+        Serial.println(kp); 
       }    
+      if (k=="ki") { 
+        Serial.print("ki=");
+        Serial.println(ki); 
+      }
+      if (k=="kd") { 
+        Serial.print("kd=");
+        Serial.println(kd); 
+      }
       if (k=="start") {
         serialOutput=1;
       }
       if (k=="stop") {
         serialOutput=0;
+      }
+      if (k=="settings") {
+        Serial.print("Set,");
+        Serial.print(setpoint);
+        Serial.print(",");
+        Serial.print(mode);
+        Serial.print(",");
+        Serial.print(kp);
+        Serial.print(",");
+        Serial.print(ki);
+        Serial.print(",");
+        Serial.println(kd);
       }
     }
     
@@ -151,8 +185,14 @@ void loop() {
       if (k=="mode") {        //change mode, chose 1 (proportional controller) or 0 (simple thermostat)
         mode = v.toInt();
       }
-      if (k=="gain") {        //change gain
-        gain = v.toInt();
+      if (k=="kp") {        //change gain
+        kp = v.toInt();
+      }
+      if (k=="ki") {        //change gain
+        ki = v.toInt();
+      }
+      if (k=="kd") {        //change gain
+        kd = v.toInt();
       }
 
     }
@@ -180,7 +220,9 @@ if (serialOutput==1){
 }
   
   
-  delay(1000);
+  delay(dt * 1000);
 
 }
+
+
 
