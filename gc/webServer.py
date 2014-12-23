@@ -2,7 +2,7 @@
 #
 #############################################################################
 #
-# Copyright Graham Jones, December 2013 
+# Copyright Graham Jones, December 2014 
 #
 #############################################################################
 #
@@ -29,7 +29,6 @@ import json
 import bottle
 #from bottle import route
 from threading import Thread
-import httplib2                     # Needed to communicate with camera
 
 
 # This trick is taken from http://stackoverflow.com/questions/8725605/
@@ -63,9 +62,21 @@ class WebServer():
         return "ok"
 
     def setKp(self):
-        gain=int(bottle.request.query.setpoint)
-        print "setKp(%d)" % gain
-        self._ardCtrl.setKp(gain)
+        kp=int(bottle.request.query.kp)
+        print "setKp(%d)" % kp
+        self._ardCtrl.setKp(kp)
+        bottle.redirect("/")
+
+    def setKi(self):
+        ki=int(bottle.request.query.ki)
+        print "setKi(%d)" % ki
+        self._ardCtrl.setKi(ki)
+        bottle.redirect("/")
+
+    def setKd(self):
+        kd=int(bottle.request.query.kd)
+        print "setKd(%d)" % kd
+        self._ardCtrl.setKd(kd)
         bottle.redirect("/")
 
     def start(self):
@@ -77,7 +88,10 @@ class WebServer():
         self._ardCtrl.stop()
         bottle.redirect("/")
 
-        
+    def settings(self):
+        setStr = self._ardCtrl.settings()
+        print setStr
+        return setStr
 
     def staticFiles(self,filepath):
         """ Used to serve the static files from the /static path"""
@@ -102,6 +116,10 @@ def setRoutes(app):
     bottle.route("/static/<filepath:path>")(app.staticFiles)
     bottle.route("/chartImg")(app.getChartImg)
     bottle.route("/setSetPoint")(app.setSetPoint)
+    bottle.route("/setKp")(app.setKp)
+    bottle.route("/setKi")(app.setKi)
+    bottle.route("/setKd")(app.setKd)
     bottle.route("/start")(app.start)    
     bottle.route("/stop")(app.stop)   
+    bottle.route("/settings")(app.settings)   
     bottle.route("/setKp")(app.setKp)

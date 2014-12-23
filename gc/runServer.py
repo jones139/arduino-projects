@@ -133,6 +133,9 @@ class runServer(object):
                     plt.grid(b=True, which='both', color='0.65',linestyle='-')
                     #plt.draw()
                     plt.savefig('www/out.png')
+            elif (mylist[0]=='Set'):
+                    self.settingsStr = line  # used by 'settings' function.
+                    self.haveSettings = True
             else:
                 if (len(line.split('\n')[0])>0):
                     print "Message %s" % line.split('\n')[0]
@@ -143,17 +146,36 @@ class runServer(object):
 
     def setKp(self,gain):
         print "setKp(%d)" % gain
-        self.ser.write("gain=%d" % gain)
+        self.ser.write("kp=%d" % gain)
+
+    def setKi(self,gain):
+        print "setKi(%d)" % gain
+        self.ser.write("ki=%d" % gain)
+
+    def setKd(self,gain):
+        print "setKd(%d)" % gain
+        self.ser.write("kd=%d" % gain)
 
     def start(self):
         print "Sending start command"
         self.ser.write("start")
         print "returning to main loop...."
 
-
     def stop(self):
         print "sending stop command"
         self.ser.write("stop")
+
+    def settings(self):
+        self.haveSettings = False    # Flag - set by main loop if settings received.
+        print "Requesting settings"
+        self.ser.write("settings")
+
+        print "Waiting for settings to be returned..."
+        # wait for main loop to set haveSettings.
+        while (not self.haveSettings):  
+            pass
+        print "found settings: %s" % self.settingsStr
+        return self.settingsStr
     
 if __name__=="__main__":
     # Boilerplate code from https://gist.github.com/ssokolow/151572
