@@ -1,7 +1,7 @@
 <html>
 <head>
-<title>Chromatograph Web Server</title>
-<script src="jquery-1.11.2.min.js"></script>
+   <title>Chromatograph Web Server</title>
+   <script src="jquery-1.11.2.min.js"></script>
 </head>
 <body>
 <table width="100%" border="0">
@@ -19,29 +19,22 @@
          Change setpoint to : <input type="text" name="setpoint" id="setpoint" size="3" />
          <input type="button" name="go" id="gobutton"  value="Go" />
          </form>
-         <form>
-         Mode : <select name="dropdown">
-         <option value="Mode 0">Simple</option>
-         <option value="Mode 1" selected>PID</option>
-         </select>
-         </form>
          Gains :
          <form>
          kp : <input type="text" name"kp" id="kp" size="3" />
-         <input type="button" name="go" id="gobutton"  value="Go" />
+         <input type="button" name="go" id="kpbutton"  value="Go" />
          </form>
          <form>
          ki : <input type="text" name"ki" id="ki" size="3" />
-         <input type="button" name="go" id="gobutton"  value="Go" />
+         <input type="button" name="go" id="kibutton"  value="Go" />
          </form>
          <form>
          kd : <input type="text" name"kd" id="kd" size="3" />
-         <input type="button" name="go" id="gobutton"  value="Go" />
+         <input type="button" name="go" id="kdbutton"  value="Go" />
          </form>
       </td>
    </tr>
 
-   </tr>
 </table>
 
 
@@ -50,9 +43,31 @@
 
 
 <script>
+
 setpoint=function(){
    spVal = $("#setpoint").val();
    url = "/setSetPoint?setpoint="+spVal;
+   alert("clicked - url="+url    );
+   window.location.href=url;
+};
+
+set_kp = function(){
+   spVal = $("#kp").val();
+   url = "/setKp?kp="+spVal;
+   alert("clicked - url="+url    );
+   window.location.href=url;
+};
+
+set_ki = function(){
+   spVal = $("#ki").val();
+   url = "/setKi?ki="+spVal;
+   alert("clicked - url="+url    );
+   window.location.href=url;
+};
+
+set_kd = function(){
+   spVal = $("#kd").val();
+   url = "/setKd?kd="+spVal;
    alert("clicked - url="+url    );
    window.location.href=url;
 };
@@ -61,11 +76,38 @@ function refresh(){
 $("#chart").attr("src","/static/out.png?"+new Date().getTime());
 };
 
+ 
+
+function get_settings() {
+    $.ajax({url:"/settings",success:populate_form});
+};
+
+function populate_form(settingsStr) {
+  // alert (settingsStr);
+   settingsArr = settingsStr.split(",");
+  // alert (settingsArr[0]);
+   setpoint = settingsArr[1];
+   mode = settingsArr[2];
+   kp = settingsArr[3];
+   ki = settingsArr[4];
+   kd = settingsArr[5];
+   $("#setpoint").val( setpoint);
+   $("#kp").val(kp);
+   $("#ki").val(ki);
+   $("#kd").val(kd);
+   
+   
+};
+
 $(document).ready(function(){
    $("#gobutton").click(setpoint);
-setInterval("refresh();",5000);
+   $("#kpbutton").click(set_kp);
+   $("#kibutton").click(set_ki);
+   $("#kdbutton").click(set_kd);
+   setInterval("refresh();",5000);
+   get_settings();
 
-}); 
+});
 </script>
 </body>
 </html>
