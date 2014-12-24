@@ -158,7 +158,11 @@ void loop() {
         Serial.print(",");
         Serial.print(ki);
         Serial.print(",");
-        Serial.println(kd);
+        Serial.print(kd);
+        Serial.print(",");
+        Serial.print("tempDiff");
+        Serial.print(",");
+        Serial.println("integral");
       }
     }
     
