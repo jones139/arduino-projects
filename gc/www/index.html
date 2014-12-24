@@ -44,32 +44,34 @@
 
 <script>
 
+send_url = function(urlStr) {
+    // Send the specified URL to the server, then call the get_settings function.
+    $.ajax({url:urlStr,success:function() {get_settings();}});
+}
+
+
 setpoint=function(){
    spVal = $("#setpoint").val();
    url = "/setSetPoint?setpoint="+spVal;
-   alert("clicked - url="+url    );
-   window.location.href=url;
+   send_url(url);
 };
 
 set_kp = function(){
    spVal = $("#kp").val();
    url = "/setKp?kp="+spVal;
-   alert("clicked - url="+url    );
-   window.location.href=url;
+   send_url(url);
 };
 
 set_ki = function(){
    spVal = $("#ki").val();
    url = "/setKi?ki="+spVal;
-   alert("clicked - url="+url    );
-   window.location.href=url;
+   send_url(url);
 };
 
 set_kd = function(){
    spVal = $("#kd").val();
    url = "/setKd?kd="+spVal;
-   alert("clicked - url="+url    );
-   window.location.href=url;
+   send_url(url);
 };
 
 function refresh(){

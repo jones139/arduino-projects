@@ -58,35 +58,35 @@ class WebServer():
         setpoint=int(bottle.request.query.setpoint)
         print "setSetPoint(%d)" % setpoint
         self._ardCtrl.setSetPoint(setpoint)
-        bottle.redirect("/")
         return "ok"
 
     def setKp(self):
         kp=int(bottle.request.query.kp)
         print "setKp(%d)" % kp
         self._ardCtrl.setKp(kp)
-        bottle.redirect("/")
+        return "ok"
+
 
     def setKi(self):
         ki=int(bottle.request.query.ki)
         print "setKi(%d)" % ki
         self._ardCtrl.setKi(ki)
-        bottle.redirect("/")
+        return "ok"
+
 
     def setKd(self):
         kd=int(bottle.request.query.kd)
         print "setKd(%d)" % kd
         self._ardCtrl.setKd(kd)
-        bottle.redirect("/")
+        return "ok"
 
     def start(self):
         self._ardCtrl.start()
-        bottle.redirect("/")
         return "ok"
 
     def stop(self):
         self._ardCtrl.stop()
-        bottle.redirect("/")
+        return "ok"
 
     def settings(self):
         setStr = self._ardCtrl.settings()
