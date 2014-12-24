@@ -15,7 +15,6 @@ int switchState = 0; //switch resets timer
 //timer
 unsigned long startMillis = 0; //timer
 //proportional controller
-int mode = 1; //mode 1 = proportional controller, mode 0 = simple thermostat
 int kp = 10;
 int ki = 1;
 int kd = 1;//constant, multiplied by tempDiff to give output
@@ -93,15 +92,7 @@ void loop() {
   int val = analogRead( therm );
   int val2 = analogRead( therm2 );
   int val3 = analogRead( therm3 );
-  if (mode == 0) {  //simple thermostat
-    if (val < setpoint) {  
-      output = 255;
-    }
-    else {
-      output = 0;
-    }
-  }
-  if (mode == 1) {  //proportional controller
+
     int tempDiff = setpoint - val;
     integral = integral + tempDiff * dt;
     int derivative = (tempDiff - preErr) / dt;
@@ -114,9 +105,8 @@ void loop() {
     if (output > 255) {
       output = 255;
     }
-  }
+
   analogWrite (heaterPin,output);
-  
   ////////////////////////////////////////////////
   // respond to commands from serial.
   ////////////////////////////////////////////////
@@ -142,10 +132,6 @@ void loop() {
         Serial.print("setpoint=");
         Serial.println(setpoint);
       }
-      if (k=="mode") {
-        Serial.print("mode=");
-        Serial.println(mode);
-      }
       if (k=="kp") { 
         Serial.print("kp=");
         Serial.println(kp); 
@@ -168,8 +154,6 @@ void loop() {
         Serial.print("Set,");
         Serial.print(setpoint);
         Serial.print(",");
-        Serial.print(mode);
-        Serial.print(",");
         Serial.print(kp);
         Serial.print(",");
         Serial.print(ki);
@@ -181,9 +165,6 @@ void loop() {
     else {
       if (k=="setpoint") {    //change setpoint
         setpoint = v.toInt();
-      }
-      if (k=="mode") {        //change mode, chose 1 (proportional controller) or 0 (simple thermostat)
-        mode = v.toInt();
       }
       if (k=="kp") {        //change gain
         kp = v.toInt();
@@ -219,10 +200,10 @@ if (serialOutput==1){
   Serial.println();
 }
   
-  
   delay(dt * 1000);
 
 }
+
 
 
 
