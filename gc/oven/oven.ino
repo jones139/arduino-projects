@@ -5,6 +5,7 @@ int therm2 = 1;
 int therm3 = 2;
 int switchPin = 3;
 int lightPin = 4;
+int pumpPin = 5;
 //temperature setpoint
 // 550 is good for testing (around 25degC)
 // 850 is around 40degC
@@ -70,22 +71,10 @@ void loop() {
   // reset switch
   ///////////////////////////////////////////////////////
   switchState = digitalRead(switchPin);
-  if (switchState == HIGH) {
-    digitalWrite(lightPin, LOW);
-  }
-  if (switchState == LOW) {
-    digitalWrite(lightPin, HIGH);
-  }  
-  /////////////////////////////////////////////////////////
-  // read time and thermistor values and write to serial.
-  /////////////////////////////////////////////////////////
   unsigned long time = millis();
   if (switchState == LOW) {
     startMillis = time;
   }
-  
-
-
   ////////////////////////////////////////////////
   // temperature controller.
   ////////////////////////////////////////////////
@@ -110,7 +99,6 @@ void loop() {
   ////////////////////////////////////////////////
   // respond to commands from serial.
   ////////////////////////////////////////////////
-
   while (Serial.available()) {
     if (Serial.available() > 0) {
       char c = Serial.read();
@@ -160,10 +148,11 @@ void loop() {
         Serial.print(",");
         Serial.print(kd);
         Serial.print(",");
-        Serial.print("tempDiff");
+        Serial.print(tempDiff);
         Serial.print(",");
-        Serial.println("integral");
+        Serial.println(integral);
       }
+
     }
     
     else {
@@ -178,6 +167,16 @@ void loop() {
       }
       if (k=="kd") {        //change gain
         kd = v.toInt();
+      }
+      if (k=="pump") {
+        if (v=="on") {
+        digitalWrite(pumpPin, HIGH);
+        Serial.println("Pump is switched on");
+        }
+        if (v=="off") {
+        digitalWrite(pumpPin, LOW);
+        Serial.println("Pump is switched off");
+       }
       }
 
     }
@@ -201,12 +200,15 @@ if (serialOutput==1){
   Serial.print(val3-val2);
   Serial.print(",");
   Serial.print(output);
+  Serial.print(",");
+  Serial.print(integral);
   Serial.println();
 }
   
   delay(dt * 1000);
 
 }
+
 
 
 
