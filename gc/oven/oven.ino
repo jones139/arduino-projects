@@ -4,8 +4,7 @@ int therm = 0;
 int therm2 = 1;
 int therm3 = 2;
 int switchPin = 3;
-int lightPin = 4;
-int pumpPin = 5;
+int pumpPin = 4;
 //temperature setpoint
 // 550 is good for testing (around 25degC)
 // 850 is around 40degC
@@ -57,7 +56,7 @@ void setup() {
   pinMode(heaterPin, OUTPUT);
   pinMode(therm, INPUT);
   pinMode(switchPin, INPUT);
-  pinMode(lightPin, OUTPUT);
+  pinMode(pumpPin, OUTPUT);
   digitalWrite(switchPin, HIGH);  
   preErr = 0;
   integral = 0;

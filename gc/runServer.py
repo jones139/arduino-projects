@@ -57,9 +57,9 @@ class runServer(object):
         if (self.debug): print "tmpdir=%s\n" % self._tmpdir
 
 
-        print "Opening Serial Connection"
         if (port == None):
             port = '/dev/ttyUSB0'
+        print "Opening Serial Connection on %s" % port
         self.ser = serial.Serial(port,9600,timeout=1)
         print "Waiting for serial comms to settle..."
         time.sleep(2)
@@ -164,6 +164,15 @@ class runServer(object):
     def stop(self):
         print "sending stop command"
         self.ser.write("stop")
+
+    def pumpstart(self):
+        print "Sending start command"
+        self.ser.write("pump=on")
+        print "returning to main loop...."
+
+    def pumpstop(self):
+        print "sending stop command"
+        self.ser.write("pump=off")
 
     def settings(self):
         self.haveSettings = False    # Flag - set by main loop if settings received.

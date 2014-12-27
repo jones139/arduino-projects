@@ -88,6 +88,14 @@ class WebServer():
         self._ardCtrl.stop()
         return "ok"
 
+    def pumpstart(self):
+        self._ardCtrl.pumpstart()
+        return "ok"
+
+    def pumpstop(self):
+        self._ardCtrl.pumpstop()
+        return "ok"
+
     def settings(self):
         setStr = self._ardCtrl.settings()
         print setStr
@@ -121,5 +129,6 @@ def setRoutes(app):
     bottle.route("/setKd")(app.setKd)
     bottle.route("/start")(app.start)    
     bottle.route("/stop")(app.stop)   
-    bottle.route("/settings")(app.settings)   
-    bottle.route("/setKp")(app.setKp)
+    bottle.route("/settings")(app.settings)
+    bottle.route("/pumpstart")(app.pumpstart)    
+    bottle.route("/pumpstop")(app.pumpstop)   

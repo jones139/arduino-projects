@@ -32,6 +32,8 @@
          kd : <input type="text" name"kd" id="kd" size="3" />
          <input type="button" name="go" id="kdbutton"  value="Go" />
          </form>
+         Pump : <input type="button" name="on" id="onbutton" value="On" />
+         <input type="button" name="off" id="offbutton" value="Off" />
       </td>
    </tr>
 
@@ -74,6 +76,16 @@ set_kd = function(){
    send_url(url);
 };
 
+set_pumpon = function(){
+   url = "/pumpstart";
+   send_url(url);
+};
+
+set_pumpoff = function(){
+   url = "/pumpstop";
+   send_url(url);
+};
+
 function refresh(){
 $("#chart").attr("src","/static/out.png?"+new Date().getTime());
 };
@@ -106,6 +118,9 @@ $(document).ready(function(){
    $("#kpbutton").click(set_kp);
    $("#kibutton").click(set_ki);
    $("#kdbutton").click(set_kd);
+   $("#onbutton").click(set_pumpon);
+   $("#offbutton").click(set_pumpoff);
+   
    setInterval("refresh();",5000);
    get_settings();
 
