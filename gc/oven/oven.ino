@@ -1,6 +1,6 @@
 //pins used
 int heaterPin = 9;
-int therm = 0;
+int therm1 = 0;
 int therm2 = 1;
 int therm3 = 2;
 int switchPin = 3;
@@ -8,16 +8,14 @@ int pumpPin = 4;
 
 //temp calculation
 #define thermNom  100000  //resistance at 25 degC
-#define tempNom 25       //temperature for nomial resistance
-#define numSamp 5        //number of samples
-#define bCoEff 3950      //beta coefficient of themistor (usually 3000-4000)
+#define tempNom 25        //temperature for nomial resistance
+#define numSamp 5         //number of samples
+#define bCoEff 3950       //beta coefficient of themistor (usually 3000-4000)
 #define serRes 100000     //value of other resistor
 int samp[5];
 
-//temperature setpoint
-// 550 is good for testing (around 25degC)
-// 850 is around 40degC
-int defaultSetpoint = 800; //temperature controlled to setpoint
+//temperature setpoint in degC
+int defaultSetpoint = 50; //temperature controlled to setpoint
 int setpoint = defaultSetpoint;
 
 //switch
@@ -61,12 +59,12 @@ int parseCmd(String cmdLine, String *key,String *value) {
  * (serRes defined as global variable).
  */
 float countsToRes (int c) {
-    float rT;
-    rT = (serRes * c) / (1023 - c);
-    return (rT);
+  float rT;
+  rT = (serRes * c) / (1023 - c);
+  return (rT);
 }
 float resToTemp (float rT) {
-    float steinhart;
+  float steinhart;
   steinhart = rT / thermNom;  //(R/Ro)
   steinhart = log(steinhart);  //ln(R/Ro)
   steinhart /= bCoEff;  //1/B * ln(R/Ro)
@@ -86,7 +84,7 @@ void setup() {
   Serial.begin(9600);
   startMillis = millis();
   pinMode(heaterPin, OUTPUT);
-  pinMode(therm, INPUT);
+  pinMode(therm1, INPUT);
   pinMode(switchPin, INPUT);
   pinMode(pumpPin, OUTPUT);
   digitalWrite(switchPin, HIGH);  
@@ -110,11 +108,15 @@ void loop() {
   ////////////////////////////////////////////////
   // temperature controller.
   ////////////////////////////////////////////////
-  int val = analogRead( therm );
-  int val2 = analogRead( therm2 );
-  int val3 = analogRead( therm3 );
+  int val1 = analogRead(therm1);
+  int val2 = analogRead(therm2);
+  int val3 = analogRead(therm3);
+  
+  float t1 = resToTemp(countsToRes(val1));
+  float t2 = resToTemp(countsToRes(val2));
+  float t3 = resToTemp(countsToRes(val3));
 
-    int tempDiff = setpoint - val;
+    int tempDiff = setpoint - t1;
     integral = integral + tempDiff * dt;
     int derivative = (tempDiff - preErr) / dt;
     output = tempDiff * kp + integral * ki + derivative * kd;
@@ -128,23 +130,6 @@ void loop() {
     }
 
   analogWrite (heaterPin,output);
-  ////////////////////////////////////////////////
-  //calculate temperature
-  ////////////////////////////////////////////////
-  
-  //convert the value to resistance
-  float rT;
-
-  rT = countsToRes(val);
-  
-
-  //convert to temperature
-float t1;
-
-  t1 = resToTemp(rT);
-  float t2;
-  t2=resToTemp(countsToRes(val2));
-  
   ////////////////////////////////////////////////
   // respond to commands from serial.
   ////////////////////////////////////////////////
@@ -242,11 +227,11 @@ if (serialOutput==1){
   Serial.print(",");
   Serial.print(t1);
   Serial.print(",");
-  Serial.print(val2);
+  Serial.print(t2);
   Serial.print(",");
-  Serial.print(val3);
+  Serial.print(t3);
   Serial.print(",");
-  Serial.print(val3-val2);
+  Serial.print(t3-t2);
   Serial.print(",");
   Serial.print(output);
   Serial.print(",");
