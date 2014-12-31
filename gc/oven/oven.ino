@@ -5,15 +5,27 @@ int therm2 = 1;
 int therm3 = 2;
 int switchPin = 3;
 int pumpPin = 4;
+
+//temp calculation
+#define thermNom  100000  //resistance at 25 degC
+#define tempNom 25       //temperature for nomial resistance
+#define numSamp 5        //number of samples
+#define bCoEff 3950      //beta coefficient of themistor (usually 3000-4000)
+#define serRes 100000     //value of other resistor
+int samp[5];
+
 //temperature setpoint
 // 550 is good for testing (around 25degC)
 // 850 is around 40degC
 int defaultSetpoint = 800; //temperature controlled to setpoint
 int setpoint = defaultSetpoint;
+
 //switch
 int switchState = 0; //switch resets timer
+
 //timer
 unsigned long startMillis = 0; //timer
+
 //proportional controller
 int kp = 10;
 int ki = 1;
@@ -43,6 +55,26 @@ int parseCmd(String cmdLine, String *key,String *value) {
   return(equalsPos);
 }
 
+/**
+ * Convert ADC counts 'c' to resistance, assuming it is wired
+ * as a potential divider with series resistance serRes ohms.
+ * (serRes defined as global variable).
+ */
+float countsToRes (int c) {
+    float rT;
+    rT = (serRes * c) / (1023 - c);
+    return (rT);
+}
+float resToTemp (float rT) {
+    float steinhart;
+  steinhart = rT / thermNom;  //(R/Ro)
+  steinhart = log(steinhart);  //ln(R/Ro)
+  steinhart /= bCoEff;  //1/B * ln(R/Ro)
+  steinhart += 1.0 / (tempNom + 273.15);  //+(1/To)
+  steinhart = 1.0 / steinhart;  //Invert
+  steinhart -= 273.15;  //convert to degC
+  return (steinhart);
+}
 
 
 
@@ -60,6 +92,7 @@ void setup() {
   digitalWrite(switchPin, HIGH);  
   preErr = 0;
   integral = 0;
+ 
 }
 ///////////////////////////////////////////////////////
 
@@ -95,6 +128,23 @@ void loop() {
     }
 
   analogWrite (heaterPin,output);
+  ////////////////////////////////////////////////
+  //calculate temperature
+  ////////////////////////////////////////////////
+  
+  //convert the value to resistance
+  float rT;
+
+  rT = countsToRes(val);
+  
+
+  //convert to temperature
+float t1;
+
+  t1 = resToTemp(rT);
+  float t2;
+  t2=resToTemp(countsToRes(val2));
+  
   ////////////////////////////////////////////////
   // respond to commands from serial.
   ////////////////////////////////////////////////
@@ -190,7 +240,7 @@ if (serialOutput==1){
   Serial.print("data,");
   Serial.print(time-startMillis);
   Serial.print(",");
-  Serial.print(val);
+  Serial.print(t1);
   Serial.print(",");
   Serial.print(val2);
   Serial.print(",");
