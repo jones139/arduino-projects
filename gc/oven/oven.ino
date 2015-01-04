@@ -138,7 +138,6 @@ void loop() {
       char c = Serial.read();
       readString += c;
     }
-
   }
 
     //Serial.println (readString);
