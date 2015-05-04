@@ -1,3 +1,6 @@
 [submodule "arduino-projects.wiki"]
 	path = arduino-projects.wiki
 	url = git://github.com/jones139/arduino-projects.wiki
+[submodule "Android-with-Arduino-Bluetooth"]
+	path = Android-with-Arduino-Bluetooth
+	url = https://github.com/jones139/Android-with-Arduino-Bluetooth.git
