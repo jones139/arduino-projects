@@ -39,7 +39,7 @@ public class GreenHouseController {
 	Log.v(TAG,"GreenHouseController()");
 	mGd = gd;
 	Log.v(TAG,"Connecting to Bluetooth Device");
-	mBlue = BluetoothArduino.getInstance("GreenHouseController");
+	mBlue = BluetoothArduino.getInstance("mint-0");
 	mBlue.Connect();
     }
 
