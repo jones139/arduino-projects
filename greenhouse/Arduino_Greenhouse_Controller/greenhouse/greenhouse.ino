@@ -13,46 +13,214 @@
 *    D9:  Output - Piezo sounder
 */  
 
-//pins used
-int thermPin = 0;
-int flowPin = 3;
-int pumpPin = 4;
-int pumpIndicatorPin = 5;
-int warnIndicatorPin = 6;
-int sounderPin = 9;
-int flowInterrupt = 1;  // (interrupt 1 is connected to pin 3)
+// Declare functions
+int parseCmd(String cmdLine, String *key,String *value);
+float resToTemp (float rT);
+float countsToRes (int c);
+void startWatering();
+void stopWatering();
 
-//temp calculation
-#define thermNom  100000  //resistance at 25 degC
-#define tempNom 25        //temperature for nomial resistance
-#define numSamp 5         //number of samples
+//Arduino pin connection definitions.
+int thermPin = 0;       // Analogue input from thermistor.
+int flowPin = 3;        // pulse flow meter input.
+int flowInterrupt = 1;  // (interrupt 1 is connected to pin 3)
+int pumpPin = 4;        // solid state relay to control pump.
+int pumpIndicatorPin = 5;  // LED output to show pump state.
+int warnIndicatorPin = 6;  // LED warning indicator.
+int sounderPin = 9;        // Piezo sounder.
+
+// Coefficients for conversion of analogue signal from
+// thermistor to temperature in degC.
+#define thermNom  100000  //resistance (Ohm) at nominal temperature
+#define tempNom 25        //temperature (degC) at nominal resistance
 #define bCoEff 3950       //beta coefficient of themistor (usually 3000-4000)
-#define serRes 100000     //value of other resistor
-int samp[5];
+#define serRes 100000     //value of series resistor in the potential divider (Ohm)
+
+// Moving average calculation coefficients
+#define decayFac 0.1      // decay factor in moving average calc.
+#define samplePeriod 3600 // temperature sampling period for moving average.
 
 // State Variables
-// Flow meter pulse counts.
-volatile int flowPulseCount = 0;
-int pumpStatus = 0;
-int warnStatus = 1;
+volatile int flowPulseCount = 0; // Flow meter pulse counts.
+int pumpStatus = 0;   // Current pump on/off status.
+int warnStatus = 0;   // Current warning status.
+int serialOutput=0; // By default serial output of data is off, until
+                    // 'start' command is issued by computer.
+unsigned long startMillis = 0; // start time.
+
+// Moving average temperature
+float avTemp =  0.0;  // Moving average ambient temperature.
+float curTemp = 0.0;  // Current temperature
+unsigned long lastTempSampleTime = 0;  // time (millis of last temperature sample.
+
+// watering times
+float waterRate = 10.0;   // total amount of water required (litres/day).
+float nWatering = 5;      // number of times per day to water.
+unsigned long lastWateringTime = 0;
 
 
-//timer
-unsigned long startMillis = 0; //timer
 
-
-int serialOutput=0; // By default serial output of data is off, unti
-                      // 'start' command is issued by computer.
-                      
 int dt = 1;  //loop period (sec)
 
-String readString;
+/**
+ * Interrupt handler called on rising input on pin flowPin.
+ */
+void flowInterruptHandler() {
+  flowPulseCount++; 
+}
+
+
+///////////////////////////////////////////////////////
+
+void setup() {                
+
+  Serial.begin(9600);
+  startMillis = millis();
+  pinMode(thermPin, INPUT);
+  pinMode(pumpPin, OUTPUT);
+  pinMode(flowPin, INPUT);
+  pinMode(pumpIndicatorPin, OUTPUT);
+  pinMode(warnIndicatorPin, OUTPUT);
+  pinMode(sounderPin, OUTPUT);
+
+  // set internal pull-up resistors.
+  digitalWrite(flowPin, HIGH); 
+
+  // Set flow meter pin to trigger interrupt so we don't miss any pulses.
+  attachInterrupt(flowInterrupt, flowInterruptHandler,RISING);  
+}
+///////////////////////////////////////////////////////
+
+void loop() {
+  String readString;
+  String k,v;
+
+  unsigned long tnow = millis();
+
+  ////////////////////////////////////////////////
+  // temperature monitor
+  ////////////////////////////////////////////////
+  curTemp = resToTemp(countsToRes(analogRead(thermPin)));
+  // Check if we need to add this temperature to rolling average.
+  if ((tnow-lastTempSampleTime)>samplePeriod*1000) {
+    avTemp = decayFac*curTemp + (1.0-decayFac)*avTemp;
+    lastTempSampleTime = tnow;
+  }
+
+
+  /////////////////////////////////////////////
+  // Check if it is time to start watering
+  /////////////////////////////////////////////
+  if ((tnow-lastWateringTime)>1000*86400/nWatering) {
+    startWatering();
+    lastWateringTime = tnow;
+  }
+
+
+
+  // Test - alternate warning and pump running to test hardware.
+  if (pumpStatus == 0) 
+    pumpStatus = 1;
+  else
+    pumpStatus = 0;
+    
+  if (warnStatus == 0) 
+    warnStatus = 1;
+  else
+    warnStatus = 0;
+
+  digitalWrite(pumpIndicatorPin,pumpStatus);
+  digitalWrite(pumpPin,pumpStatus);
+  digitalWrite(warnIndicatorPin,warnStatus);
+
+  ////////////////////////////////////////////////
+  // respond to commands from serial.
+  ////////////////////////////////////////////////
+  while (Serial.available()) {
+    if (Serial.available() > 0) {
+      char c = Serial.read();
+      readString += c;
+    }
+  }
+
+  //Serial.println (readString);
+  if (readString.length()>0) {
+    parseCmd(readString, &k,&v);
+    Serial.print("parseCmd k=");
+    Serial.println(k);
+    Serial.print("parseCmd v=");
+    Serial.println(v);
+    
+    // First check single word commands (no value provided).
+    if (v=="") {
+      if (k=="start") {
+        serialOutput=1;
+      }
+      if (k=="stop") {
+        serialOutput=0;
+      }
+      // Reset flow pulse counter.
+      if (k=="reset") {
+        flowPulseCount = 0; 
+      }
+      if (k=="settings") {
+        Serial.print("Set,");
+        Serial.println("xxxxxx");
+      }
+
+    }
+    // Otherwise check commands with a value provided.
+    else {
+      if (k=="setpoint") {    //change setpoint
+        //setpoint = v.toInt();
+      }
+
+    }
+    readString = "";
+  }
+  
+
+  // Send data to serial output if required.
+  if (serialOutput==1){ 
+    Serial.print("data,");
+    Serial.print(tnow-startMillis);
+    Serial.print(",");
+    Serial.print(curTemp);
+    Serial.print(",");
+    Serial.print(flowPulseCount);
+    Serial.print(",");
+    Serial.print(pumpStatus);
+    Serial.print(",");
+    Serial.print(warnStatus);
+    Serial.println();
+  }
+  
+
+  // wait for dt seconds.
+  delay(dt * 1000);
+
+}
+
+
+void startWatering() {
+  pumpStatus = 1;
+  flowPulseCount = 0;
+}
+
+
+void stopWatering() {
+  pumpStatus = 0;
+  flowPulseCount = 0;
+
+}
+
+
 
 /**
-  * Parse string cmdLine into a key/value pair, separated by
-  * an equals sign (=).   If no equals sign is found, it sets key
-  * to be the string pointed to by cmdLine.
-  */
+ * Parse string cmdLine into a key/value pair, separated by
+ * an equals sign (=).   If no equals sign is found, it sets key
+ * to be the string pointed to by cmdLine.
+ */
 int parseCmd(String cmdLine, String *key,String *value) {
   int equalsPos;
   equalsPos = cmdLine.indexOf('=');
@@ -91,127 +259,4 @@ float resToTemp (float rT) {
   steinhart -= 273.15;  //convert to degC
   return (steinhart);
 }
-
-void flowInterruptHandler() {
-  flowPulseCount++; 
-}
-
-
-///////////////////////////////////////////////////////
-
-void setup() {                
-
-  Serial.begin(9600);
-  startMillis = millis();
-  pinMode(thermPin, INPUT);
-  pinMode(pumpPin, OUTPUT);
-  pinMode(flowPin, INPUT);
-  pinMode(pumpIndicatorPin, OUTPUT);
-  pinMode(warnIndicatorPin, OUTPUT);
-  pinMode(sounderPin, OUTPUT);
-
-  // set internal pull-up resistors.
-  digitalWrite(flowPin, HIGH); 
-
-  attachInterrupt(flowInterrupt, flowInterruptHandler,RISING);  
-}
-///////////////////////////////////////////////////////
-
-void loop() {
-  int output;
-  String k,v;
-
-  unsigned long time = millis();
-
-  ////////////////////////////////////////////////
-  // temperature monitor
-  ////////////////////////////////////////////////
-  int res1 = analogRead(thermPin);
-  float t1 = resToTemp(countsToRes(res1));
-
-  if (pumpStatus = 0) 
-    pumpStatus = 1;
-  else
-    pumpStatus = 0;
-    
-  if (warnStatus = 0) 
-    warnStatus = 1;
-  else
-    warnStatus = 0;
-
-  digitalWrite(pumpIndicatorPin,pumpStatus);
-  digitalWrite(pumpPin,pumpStatus);
-  digitalWrite(warnIndicatorPin,warnStatus);
-
-  Serial.println(digitalRead(flowPin));
-
-  ////////////////////////////////////////////////
-  // respond to commands from serial.
-  ////////////////////////////////////////////////
-  while (Serial.available()) {
-    if (Serial.available() > 0) {
-      char c = Serial.read();
-      readString += c;
-    }
-  }
-
-    //Serial.println (readString);
-    if (readString.length()>0) {
-      parseCmd(readString, &k,&v);
-      Serial.print("parseCmd k=");
-      Serial.println(k);
-      Serial.print("parseCmd v=");
-      Serial.println(v);
-    
-    if (v=="") {
-      if (k=="start") {
-        serialOutput=1;
-      }
-      if (k=="stop") {
-        serialOutput=0;
-      }
-      // Reset flow pulse counter.
-      if (k=="reset") {
-        flowPulseCount = 0; 
-      }
-      if (k=="settings") {
-        Serial.print("Set,");
-        Serial.println("xxxxxx");
-      }
-
-    }
-    
-    else {
-      if (k=="setpoint") {    //change setpoint
-        //setpoint = v.toInt();
-      }
-
-    }
-    
-    readString = "";
-
-    }
-  
-
-if (serialOutput==1){
-  Serial.print("data,");
-  Serial.print(time-startMillis);
-  Serial.print(",");
-  Serial.print(t1);
-  Serial.print(",");
-  Serial.print(flowPulseCount);
-  Serial.print(",");
-  Serial.print(pumpStatus);
-  Serial.print(",");
-  Serial.print(warnStatus);
-  Serial.println();
-}
-  
-  delay(dt * 1000);
-
-}
-
-
-
-
 
