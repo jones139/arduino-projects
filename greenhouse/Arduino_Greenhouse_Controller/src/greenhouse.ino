@@ -17,13 +17,15 @@
 int parseCmd(String cmdLine, String *key,String *value);
 float resToTemp (float rT);
 float countsToRes (int c);
-float p2v(int p);
+int p2v(int p);
 void setWateringRate();
 void checkWatering(unsigned long tnow);
 void startWatering();
 void stopWatering();
 void setOutputPins();
 void handleSerialInput();
+void sendSerialData(unsigned long tnow);
+void sendSerialSettings();
 
 //Arduino pin connection definitions.
 int thermPin = 0;       // Analogue input from thermistor.
@@ -42,11 +44,8 @@ int sounderPin = 9;        // Piezo sounder.
 #define serRes 100000     //value of series resistor in the potential divider (Ohm)
 
 // Coefficients for flow rate calculation
-float litresPerPulse = 0.0022;  // Depends on flow meter!
+int mililitresPerPulse = 2;  // Depends on flow meter!
 
-// Moving average calculation coefficients
-#define decayFac 0.1      // decay factor in moving average calc.
-#define samplePeriod 3600 // temperature sampling period for moving average.
 
 // State Variables
 volatile int flowPulseCount = 0; // Flow meter pulse counts.
@@ -57,16 +56,18 @@ int serialOutput=0; // By default serial output of data is off, until
 unsigned long startMillis = 0; // start time.
 String readString = "";  // bytes read from serial input.
 
-// Moving average temperature
+// Moving average calculation coefficients
+int decayFac = 100;      // 1000*decay factor in moving average calc.
+int samplePeriod = 3600; // temperature sampling period for moving average.
 float avTemp =  0.0;  // Moving average ambient temperature.
 float curTemp = 0.0;  // Current temperature
 unsigned long lastTempSampleTime = 0;  // time (millis of last temperature sample.
 
 // watering times
-float baseWaterRate = 10.0;   // total amount of water required (litres/day).
-float baseWaterTemp = 18.0;   // temperature at which baseWaterRate is applicable.
-float waterTempCoef = 1.0;    // multiplcation factor to get actual water rate:	            // waterRate = baseWaterRate * waterTempCoef*(temp-baseWaterTemp) 
-float waterRate = 0.0;        // actual required water rate (litres/day).
+int baseWaterRate = 10000;   // total amount of water required (mililitres/day).
+int baseWaterTemp = 18;   // temperature at which baseWaterRate is applicable.
+int waterTempCoef = 1;    // 1000*multiplcation factor to get actual water rate:	        // waterRate = baseWaterRate + baseWaterRate * waterTempCoef*(temp-baseWaterTemp)/1000 
+int waterRate = 0;        // actual required water rate (mililitres/day).
 int nWatering = 5;      // number of times per day to water.
 unsigned long lastWateringTime = 0;
 
@@ -136,23 +137,8 @@ void loop() {
   checkWatering(tnow);
   setOutputPins();
   handleSerialInput();
-  
+  if (serialOutput==1) sendSerialData();
 
-  // Send data to serial output if required.
-  if (serialOutput==1){ 
-    Serial.print("data,");
-    Serial.print(tnow-startMillis);
-    Serial.print(",");
-    Serial.print(curTemp);
-    Serial.print(",");
-    Serial.print(flowPulseCount);
-    Serial.print(",");
-    Serial.print(pumpStatus);
-    Serial.print(",");
-    Serial.print(warnStatus);
-    Serial.println();
-  }
-  
 
   // wait for dt mili-seconds.
   delay(dt);
@@ -173,7 +159,15 @@ void setOutputPins() {
  * Set watering rate, based on baseline watering rate and average temperature.
  */
 void setWateringRate() {
-  waterRate = baseWaterRate * waterTempCoef*(avTemp - baseWaterTemp);
+  //Serial.print("Tav=");
+  //Serial.print(int(avTemp));
+  //Serial.print(", bwt=");
+  //Serial.print(baseWaterTemp);
+  float corr = 1.0 * baseWaterRate * waterTempCoef*(int(avTemp) - baseWaterTemp)/1000;
+  //Serial.print(", cor=");
+  //Serial.println(corr);
+  waterRate = baseWaterRate 
+    + corr;
 }
 
 /**
@@ -184,7 +178,8 @@ void checkTemperature(unsigned long tnow) {
 
   // Check if we need to add this temperature to rolling average.
   if ((tnow-lastTempSampleTime)>samplePeriod*1000) {
-    avTemp = decayFac*curTemp + (1.0-decayFac)*avTemp;
+    // factor of 1000 because decayFac is 1000 * factor.
+    avTemp = (decayFac*curTemp + (1000-decayFac)*avTemp)/1000;
     lastTempSampleTime = tnow;
   }
 }
@@ -265,10 +260,10 @@ float resToTemp (float rT) {
 }
 
 /**
- * Convert a number of flow meter pulses p into volume of water in litres.
+ * Convert a number of flow meter pulses p into volume of water in mililitres.
  */
-float p2v(int p) {
-  return (p*litresPerPulse);
+int p2v(int p) {
+  return (p*mililitresPerPulse);
 
 }
 
@@ -278,7 +273,6 @@ float p2v(int p) {
  */
 void handleSerialInput() {
   String k,v;
-  Serial.println("HandleSerialInput()");
   ////////////////////////////////////////////////
   // respond to commands from serial.
   ////////////////////////////////////////////////
@@ -291,10 +285,10 @@ void handleSerialInput() {
 
   //Serial.println (readString);
   if (readString.length()>0) {
-    Serial.print("lastChar=");
-    Serial.println(readString[readString.length()-1]);
-    if (readString[readString.length()-1]=='*') {
+    // wait for carriage return before processing - this works with picocom.
+    if (readString[readString.length()-1]=='\r') {
       Serial.println("Found end of line - processing...");
+      readString[readString.length()-1]=0;  // remove carriage return from line.
       parseCmd(readString, &k,&v);
       Serial.print("parseCmd k=");
       Serial.print(k);
@@ -311,22 +305,74 @@ void handleSerialInput() {
 	}
 	// Reset flow pulse counter.
 	if (k=="reset") {
-	  flowPulseCount = 0; 
+	  resetFlowPulseCount(); 
 	}
-	if (k=="settings") {
-	  Serial.print("Set,");
-	  Serial.println("xxxxxx");
+	if (k=="set") {
+	  sendSerialSettings();
+	}
+	if (k=="data") {
+	  sendSerialData();
 	}
 	
       }
       // Otherwise check commands with a value provided.
       else {
-	if (k=="setpoint") {    //change setpoint
-	  //setpoint = v.toInt();
+	if (k=="bwr") {    //change baseWaterRate
+	  baseWaterRate = v.toInt();
+	}
+	if (k=="bwt") {    //change baseWaterTemp
+	  baseWaterTemp = v.toInt();
+	}
+	if (k=="wrc") {    //change waterTempCoef
+	  waterTempCoef = v.toInt();
+	}
+	if (k=="dec") {    //change decayFac
+	  decayFac = v.toInt();
+	}
+	if (k=="spr") {    //change sample period
+	  samplePeriod = v.toInt();
 	}
 	
       }
       readString = "";
     }
   }
+}
+
+/**
+ * send a json string of current data to serial output
+ */
+void sendSerialData() {
+  // Send data to serial output if required.
+  unsigned long tnow = millis();
+  Serial.print("{data:{time:");
+  Serial.print(tnow-startMillis);
+  Serial.print(",curTemp:");
+  Serial.print(curTemp);
+  Serial.print(",avTemp:");
+  Serial.print(avTemp);
+  Serial.print(",waterRate:");
+  Serial.print(waterRate);
+  Serial.print(",flowPulseCount:");
+  Serial.print(flowPulseCount);
+  Serial.print(",pump:");
+  Serial.print(pumpStatus);
+  Serial.print(",warn:");
+  Serial.print(warnStatus);
+  Serial.println("}}");
+}
+
+void sendSerialSettings() {
+  Serial.print("{set:{");
+  Serial.print("bwr:");
+  Serial.print(baseWaterRate);
+  Serial.print(",bwt:");
+  Serial.print(baseWaterTemp);
+  Serial.print(",wrc:");
+  Serial.print(waterTempCoef);
+  Serial.print(",dec:");
+  Serial.print(decayFac);
+  Serial.print(",spr:");
+  Serial.print(samplePeriod);
+  Serial.println("}}");
 }
