@@ -19,12 +19,12 @@ float resToTemp (float rT);
 float countsToRes (int c);
 int p2v(int p);
 void setWateringRate();
-void checkWatering(unsigned long tnow);
+void checkWatering();
 void startWatering();
 void stopWatering();
 void setOutputPins();
 void handleSerialInput();
-void sendSerialData(unsigned long tnow);
+void sendSerialData();
 void sendSerialSettings();
 
 //Arduino pin connection definitions.
@@ -69,6 +69,9 @@ int baseWaterTemp = 18;   // temperature at which baseWaterRate is applicable.
 int waterTempCoef = 1;    // 1000*multiplcation factor to get actual water rate:	        // waterRate = baseWaterRate + baseWaterRate * waterTempCoef*(temp-baseWaterTemp)/1000 
 int waterRate = 0;        // actual required water rate (mililitres/day).
 int nWatering = 5;      // number of times per day to water.
+int pulseWarnThresh = 10;  // Number of flow meter pulses required to 
+                           // generate warning when pump is switched off.
+
 unsigned long lastWateringTime = 0;
 
 
@@ -130,11 +133,10 @@ void setup() {
 ///////////////////////////////////////////////////////
 
 void loop() {
-  unsigned long tnow = millis();
 
-  checkTemperature(tnow);
+  checkTemperature();
   setWateringRate();
-  checkWatering(tnow);
+  checkWatering();
   setOutputPins();
   handleSerialInput();
   if (serialOutput==1) sendSerialData();
@@ -159,21 +161,15 @@ void setOutputPins() {
  * Set watering rate, based on baseline watering rate and average temperature.
  */
 void setWateringRate() {
-  //Serial.print("Tav=");
-  //Serial.print(int(avTemp));
-  //Serial.print(", bwt=");
-  //Serial.print(baseWaterTemp);
   float corr = 1.0 * baseWaterRate * waterTempCoef*(int(avTemp) - baseWaterTemp)/1000;
-  //Serial.print(", cor=");
-  //Serial.println(corr);
-  waterRate = baseWaterRate 
-    + corr;
+  waterRate = baseWaterRate + corr;
 }
 
 /**
  * Read temperature, and set watering requirement based on average temp.
  */
-void checkTemperature(unsigned long tnow) {
+void checkTemperature() {
+  unsigned long tnow = millis();
   curTemp = resToTemp(countsToRes(analogRead(thermPin)));
 
   // Check if we need to add this temperature to rolling average.
@@ -187,30 +183,44 @@ void checkTemperature(unsigned long tnow) {
 /**
  * Check if it is time to start watering
  */
-void checkWatering(unsigned long tnow) {
+void checkWatering() {
+  unsigned long tnow = millis();
   // If pump is off, check if we need to start it.
   if (pumpStatus==0) {
     // Is it time for next watering?
-    if ((tnow-lastWateringTime)>1000*86400/nWatering) {
-      pumpStatus = 1;  // start pump.
-      resetFlowPulseCount();  // zero flow meter.
-      lastWateringTime = tnow;   // set start time to now.
+    if ((tnow-lastWateringTime)/1000>86400/nWatering) {
+      startWatering();
+    } else
+      // Check for leaks - pulses increasing with pump stopped
+      if (getFlowPulseCount() > pulseWarnThresh) {
+	warnStatus = 1;
     }
   } else {
     // Is it time to stop watering.
     float curVol = p2v(getFlowPulseCount());
     if (curVol > waterRate) {
-      pumpStatus = 0;   // stop pump.
-      resetFlowPulseCount();   // zero flow meter (so we can check for syphon
+      stopWatering();
     }
   }
 }
 
 
-void stopWatering() {
-  pumpStatus = 0;
-  flowPulseCount = 0;
+/**
+ * Start watering - will dispense waterRate mililitres of water.
+ */
+void startWatering() {
+  unsigned long tnow = millis();
+  pumpStatus = 1;  // start pump.
+  resetFlowPulseCount();  // zero flow meter.
+  lastWateringTime = tnow;   // set start time to now.
+}
 
+/**
+ * stop watering - shutdown pump.
+ */
+void stopWatering() {
+  pumpStatus = 0;   // stop pump.
+  resetFlowPulseCount();   // zero flow meter (so we can check for syphon
 }
 
 
@@ -297,20 +307,33 @@ void handleSerialInput() {
       
       // First check single word commands (no value provided).
       if (v=="") {
-	if (k=="start") {
+	if (k=="dataon") {
+	  Serial.println("Serial Output On");
 	  serialOutput=1;
 	}
-	if (k=="stop") {
+	if (k=="dataoff") {
+	  Serial.println("Serial Output Off");
 	  serialOutput=0;
+	}
+	if (k=="wateron") {
+	  Serial.println("Water On");
+	  startWatering();
+	}
+	if (k=="wateroff") {
+	  Serial.println("Water Off");
+	  stopWatering();
 	}
 	// Reset flow pulse counter.
 	if (k=="reset") {
+	  Serial.println("Reset Flow Meter");
 	  resetFlowPulseCount(); 
 	}
 	if (k=="set") {
+	  Serial.println("Get Settings");
 	  sendSerialSettings();
 	}
 	if (k=="data") {
+	  Serial.println("Get Data");
 	  sendSerialData();
 	}
 	
@@ -319,18 +342,27 @@ void handleSerialInput() {
       else {
 	if (k=="bwr") {    //change baseWaterRate
 	  baseWaterRate = v.toInt();
+	  Serial.println("Set BaseWaterRate");
 	}
 	if (k=="bwt") {    //change baseWaterTemp
 	  baseWaterTemp = v.toInt();
+	  Serial.println("Set BaseWaterTemp");
 	}
 	if (k=="wrc") {    //change waterTempCoef
 	  waterTempCoef = v.toInt();
+	  Serial.println("Set WaterTempCoef");
 	}
 	if (k=="dec") {    //change decayFac
 	  decayFac = v.toInt();
+	  Serial.println("Set DecayFac");
 	}
 	if (k=="spr") {    //change sample period
 	  samplePeriod = v.toInt();
+	  Serial.println("Set SamplePeriod");
+	}
+	if (k=="pwt") {    // pulse warning threshold
+	  pulseWarnThresh = v.toInt();
+	  Serial.println("PulseWarnThresh");
 	}
 	
       }
@@ -374,5 +406,7 @@ void sendSerialSettings() {
   Serial.print(decayFac);
   Serial.print(",spr:");
   Serial.print(samplePeriod);
+  Serial.print(",pwt:");
+  Serial.print(pulseWarnThresh);
   Serial.println("}}");
 }
