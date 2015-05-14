@@ -10,6 +10,7 @@
 *    D4:  Output - Pump Control (solid state relay).
 *    D5:  Output - LED  (Pump status indicator)
 *    D6:  Output - LED  (Warning indicator)
+*    D7:  Input - Reset Button (short pin to ground)
 *    D9:  Output - Piezo sounder
 */  
 
@@ -34,17 +35,8 @@ int flowInterrupt = 1;  // (interrupt 1 is connected to pin 3)
 int pumpPin = 4;        // solid state relay to control pump.
 int pumpIndicatorPin = 5;  // LED output to show pump state.
 int warnIndicatorPin = 6;  // LED warning indicator.
+int resetButtonPin = 7;    // Reset Button.
 int sounderPin = 9;        // Piezo sounder.
-
-// Coefficients for conversion of analogue signal from
-// thermistor to temperature in degC.
-#define thermNom  100000  //resistance (Ohm) at nominal temperature
-#define tempNom 25        //temperature (degC) at nominal resistance
-#define bCoEff 3950       //beta coefficient of themistor (usually 3000-4000)
-#define serRes 100000     //value of series resistor in the potential divider (Ohm)
-
-// Coefficients for flow rate calculation
-int mililitresPerPulse = 2;  // Depends on flow meter!
 
 
 // State Variables
@@ -56,23 +48,36 @@ int serialOutput=0; // By default serial output of data is off, until
 unsigned long startMillis = 0; // start time.
 String readString = "";  // bytes read from serial input.
 
-// Moving average calculation coefficients
-int decayFac = 100;      // 1000*decay factor in moving average calc.
-int samplePeriod = 3600; // temperature sampling period for moving average.
 float avTemp =  0.0;  // Moving average ambient temperature.
 float curTemp = 0.0;  // Current temperature
 unsigned long lastTempSampleTime = 0;  // time (millis of last temperature sample.
-
-// watering times
-int baseWaterRate = 10000;   // total amount of water required (mililitres/day).
-int baseWaterTemp = 18;   // temperature at which baseWaterRate is applicable.
-int waterTempCoef = 1;    // 1000*multiplcation factor to get actual water rate:	        // waterRate = baseWaterRate + baseWaterRate * waterTempCoef*(temp-baseWaterTemp)/1000 
-int waterRate = 0;        // actual required water rate (mililitres/day).
-int nWatering = 5;      // number of times per day to water.
-int pulseWarnThresh = 10;  // Number of flow meter pulses required to 
-                           // generate warning when pump is switched off.
-
 unsigned long lastWateringTime = 0;
+int waterRate = 0;        // actual required water rate (mililitres/day).
+
+struct settings_t {
+  // watering times
+  int baseWaterRate = 10000;   // total amount of water required (mililitres/day).
+  int baseWaterTemp = 18;   // temperature at which baseWaterRate is applicable.
+  int waterTempCoef = 1;    // 1000*multiplcation factor to get actual water rate:	        // waterRate = baseWaterRate + baseWaterRate * waterTempCoef*(temp-baseWaterTemp)/1000 
+  int nWatering = 5;      // number of times per day to water.
+  int pulseWarnThresh = 10;  // Number of flow meter pulses required to 
+  // generate warning when pump is switched off.
+  // Moving average calculation coefficients
+  int decayFac = 100;      // 1000*decay factor in moving average calc.
+  int samplePeriod = 3600; // temperature sampling period for moving average.
+
+  // Coefficients for flow rate calculation
+  int mililitresPerPulse = 2;  // Depends on flow meter!
+
+  // Coefficients for conversion of analogue signal from
+  // thermistor to temperature in degC.
+  int thermNom = 100000;  //resistance (Ohm) at nominal temperature
+  int tempNom = 25;        //temperature (degC) at nominal resistance
+  int bCoEff = 3950;       //beta coefficient of themistor (usually 3000-4000)
+  int serRes = 100000;     //value of series resistor in the potential divider (Ohm)
+};
+
+  struct settings_t set;
 
 
 // Main loop period (mili-seconds)
@@ -108,6 +113,7 @@ void setup() {
   Serial.begin(9600);
   startMillis = millis();
   pinMode(thermPin, INPUT);
+  pinMode(resetButtonPin, INPUT);
   pinMode(pumpPin, OUTPUT);
   pinMode(flowPin, INPUT);
   pinMode(pumpIndicatorPin, OUTPUT);
@@ -116,6 +122,7 @@ void setup() {
 
   // set internal pull-up resistors.
   digitalWrite(flowPin, HIGH); 
+  digitalWrite(resetButtonPin, HIGH); 
 
   // Set flow meter pin to trigger interrupt so we don't miss any pulses.
   attachInterrupt(flowInterrupt, flowInterruptHandler,RISING);  
@@ -132,6 +139,9 @@ void setup() {
 }
 ///////////////////////////////////////////////////////
 
+/**
+ * Main loop - repeats indefinitely.
+ */
 void loop() {
 
   checkTemperature();
@@ -139,12 +149,12 @@ void loop() {
   checkWatering();
   setOutputPins();
   handleSerialInput();
-  if (serialOutput==1) sendSerialData();
+  checkResetButton();
 
+  if (serialOutput==1) sendSerialData();
 
   // wait for dt mili-seconds.
   delay(dt);
-
 }
 
 
@@ -161,8 +171,9 @@ void setOutputPins() {
  * Set watering rate, based on baseline watering rate and average temperature.
  */
 void setWateringRate() {
-  float corr = 1.0 * baseWaterRate * waterTempCoef*(int(avTemp) - baseWaterTemp)/1000;
-  waterRate = baseWaterRate + corr;
+  float corr = 1.0 * set.baseWaterRate * 
+    set.waterTempCoef*(int(avTemp) - set.baseWaterTemp)/1000;
+  waterRate = set.baseWaterRate + corr;
 }
 
 /**
@@ -173,11 +184,20 @@ void checkTemperature() {
   curTemp = resToTemp(countsToRes(analogRead(thermPin)));
 
   // Check if we need to add this temperature to rolling average.
-  if ((tnow-lastTempSampleTime)>samplePeriod*1000) {
+  if ((tnow-lastTempSampleTime)>set.samplePeriod*1000) {
     // factor of 1000 because decayFac is 1000 * factor.
-    avTemp = (decayFac*curTemp + (1000-decayFac)*avTemp)/1000;
+    avTemp = (set.decayFac*curTemp + (1000-set.decayFac)*avTemp)/1000;
     lastTempSampleTime = tnow;
   }
+}
+
+/**
+ * Check Reset Button - if pressed, reset alarm.
+ */
+void checkResetButton() {
+  int buttonStatus = digitalRead(resetButtonPin);
+  if (buttonStatus == 0)
+    resetAlarm();
 }
 
 /**
@@ -188,12 +208,12 @@ void checkWatering() {
   // If pump is off, check if we need to start it.
   if (pumpStatus==0) {
     // Is it time for next watering?
-    if ((tnow-lastWateringTime)/1000>86400/nWatering) {
+    if ((tnow-lastWateringTime)/1000>86400/set.nWatering) {
       startWatering();
     } else
       // Check for leaks - pulses increasing with pump stopped
-      if (getFlowPulseCount() > pulseWarnThresh) {
-	warnStatus = 1;
+      if (getFlowPulseCount() > set.pulseWarnThresh) {
+	raiseAlarm();
     }
   } else {
     // Is it time to stop watering.
@@ -251,7 +271,7 @@ int parseCmd(String cmdLine, String *key,String *value) {
  */
 float countsToRes (int c) {
   float rT;
-  rT = (serRes * c) / (1023 - c);
+  rT = (set.serRes * c) / (1023 - c);
   return (rT);
 }
 
@@ -260,10 +280,10 @@ float countsToRes (int c) {
  */
 float resToTemp (float rT) {
   float steinhart;
-  steinhart = rT / thermNom;  //(R/Ro)
+  steinhart = rT / set.thermNom;  //(R/Ro)
   steinhart = log(steinhart);  //ln(R/Ro)
-  steinhart /= bCoEff;  //1/B * ln(R/Ro)
-  steinhart += 1.0 / (tempNom + 273.15);  //+(1/To)
+  steinhart /= set.bCoEff;  //1/B * ln(R/Ro)
+  steinhart += 1.0 / (set.tempNom + 273.15);  //+(1/To)
   steinhart = 1.0 / steinhart;  //Invert
   steinhart -= 273.15;  //convert to degC
   return (steinhart);
@@ -273,10 +293,28 @@ float resToTemp (float rT) {
  * Convert a number of flow meter pulses p into volume of water in mililitres.
  */
 int p2v(int p) {
-  return (p*mililitresPerPulse);
+  return (p*set.mililitresPerPulse);
 
 }
 
+
+
+/**
+ * Raise the warning alarm.
+ */
+void raiseAlarm() {
+  warnStatus = 1;
+  tone(sounderPin,500);
+}
+
+/**
+ * reset the warning alarm.
+ */
+void resetAlarm() {
+  resetFlowPulseCount();
+  warnStatus = 0;
+  noTone(sounderPin);
+}
 
 /**
  * read bytes from serial input if available, and respond accordingly.
@@ -297,76 +335,74 @@ void handleSerialInput() {
   if (readString.length()>0) {
     // wait for carriage return before processing - this works with picocom.
     if (readString[readString.length()-1]=='\r') {
-      Serial.println("Found end of line - processing...");
+      //Serial.println("Found end of line - processing...");
       readString[readString.length()-1]=0;  // remove carriage return from line.
       parseCmd(readString, &k,&v);
-      Serial.print("parseCmd k=");
-      Serial.print(k);
-      Serial.print(", v=");
-      Serial.println(v);
+      //Serial.print("parseCmd k=");
+      //Serial.print(k);
+      //Serial.print(", v=");
+      //Serial.println(v);
       
       // First check single word commands (no value provided).
-      if (v=="") {
-	if (k=="dataon") {
-	  Serial.println("Serial Output On");
-	  serialOutput=1;
-	}
-	if (k=="dataoff") {
-	  Serial.println("Serial Output Off");
-	  serialOutput=0;
-	}
-	if (k=="wateron") {
-	  Serial.println("Water On");
-	  startWatering();
-	}
-	if (k=="wateroff") {
-	  Serial.println("Water Off");
-	  stopWatering();
-	}
-	// Reset flow pulse counter.
-	if (k=="reset") {
-	  Serial.println("Reset Flow Meter");
-	  resetFlowPulseCount(); 
-	}
-	if (k=="set") {
-	  Serial.println("Get Settings");
-	  sendSerialSettings();
-	}
-	if (k=="data") {
-	  Serial.println("Get Data");
-	  sendSerialData();
-	}
-	
+      if (k=="dataon") {
+	Serial.println("Serial Output On");
+	serialOutput=1;
       }
-      // Otherwise check commands with a value provided.
+      else if (k=="dataoff") {
+	Serial.println("Serial Output Off");
+	serialOutput=0;
+      }
+      else if (k=="wateron") {
+	Serial.println("Water On");
+	startWatering();
+      }
+      else if (k=="wateroff") {
+	Serial.println("Water Off");
+	stopWatering();
+      }
+      else if (k=="reset") {
+	Serial.println("Reset Alarm");
+	resetAlarm(); 
+      }
+      else if (k=="set") {
+	Serial.println("Get Settings");
+	sendSerialSettings();
+      }
+      else if (k=="data") {
+	Serial.println("Get Data");
+	sendSerialData();
+      }
+      else if (k=="bwr") {    //change baseWaterRate
+	set.baseWaterRate = v.toInt();
+	Serial.println("Set BaseWaterRate");
+      }
+      else if (k=="bwt") {    //change baseWaterTemp
+	set.baseWaterTemp = v.toInt();
+	Serial.println("Set BaseWaterTemp");
+      }
+      else if (k=="wrc") {    //change waterTempCoef
+	set.waterTempCoef = v.toInt();
+	Serial.println("Set WaterTempCoef");
+      }
+      else if (k=="dec") {    //change decayFac
+	set.decayFac = v.toInt();
+	Serial.println("Set DecayFac");
+      }
+      else if (k=="spr") {    //change sample period
+	set.samplePeriod = v.toInt();
+	Serial.println("Set SamplePeriod");
+      }
+      else if (k=="pwt") {    // pulse warning threshold
+	set.pulseWarnThresh = v.toInt();
+	Serial.println("PulseWarnThresh");
+      }
       else {
-	if (k=="bwr") {    //change baseWaterRate
-	  baseWaterRate = v.toInt();
-	  Serial.println("Set BaseWaterRate");
-	}
-	if (k=="bwt") {    //change baseWaterTemp
-	  baseWaterTemp = v.toInt();
-	  Serial.println("Set BaseWaterTemp");
-	}
-	if (k=="wrc") {    //change waterTempCoef
-	  waterTempCoef = v.toInt();
-	  Serial.println("Set WaterTempCoef");
-	}
-	if (k=="dec") {    //change decayFac
-	  decayFac = v.toInt();
-	  Serial.println("Set DecayFac");
-	}
-	if (k=="spr") {    //change sample period
-	  samplePeriod = v.toInt();
-	  Serial.println("Set SamplePeriod");
-	}
-	if (k=="pwt") {    // pulse warning threshold
-	  pulseWarnThresh = v.toInt();
-	  Serial.println("PulseWarnThresh");
-	}
-	
+	Serial.print("Unrecognised Command: ");
+	Serial.println(k);
       }
       readString = "";
+    } else {
+      Serial.println(readString);
     }
   }
 }
@@ -397,16 +433,16 @@ void sendSerialData() {
 void sendSerialSettings() {
   Serial.print("{set:{");
   Serial.print("bwr:");
-  Serial.print(baseWaterRate);
+  Serial.print(set.baseWaterRate);
   Serial.print(",bwt:");
-  Serial.print(baseWaterTemp);
+  Serial.print(set.baseWaterTemp);
   Serial.print(",wrc:");
-  Serial.print(waterTempCoef);
+  Serial.print(set.waterTempCoef);
   Serial.print(",dec:");
-  Serial.print(decayFac);
+  Serial.print(set.decayFac);
   Serial.print(",spr:");
-  Serial.print(samplePeriod);
+  Serial.print(set.samplePeriod);
   Serial.print(",pwt:");
-  Serial.print(pulseWarnThresh);
+  Serial.print(set.pulseWarnThresh);
   Serial.println("}}");
 }
