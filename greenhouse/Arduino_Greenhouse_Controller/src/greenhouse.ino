@@ -181,7 +181,14 @@ void setWateringRate() {
  */
 void checkTemperature() {
   unsigned long tnow = millis();
-  curTemp = resToTemp(countsToRes(analogRead(thermPin)));
+  int c;
+  float r;
+  c = analogRead(thermPin);
+  //Serial.println(c);
+  r = countsToRes(c);
+  //Serial.println(r);
+  curTemp = resToTemp(r);
+  //Serial.println(curTemp);
 
   // Check if we need to add this temperature to rolling average.
   if ((tnow-lastTempSampleTime)>set.samplePeriod*1000) {
@@ -271,7 +278,7 @@ int parseCmd(String cmdLine, String *key,String *value) {
  */
 float countsToRes (int c) {
   float rT;
-  rT = (set.serRes * c) / (1023 - c);
+  rT = (1.0*set.serRes * c) / (1023 - c);
   return (rT);
 }
 
