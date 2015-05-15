@@ -8,11 +8,12 @@
 *    Digital Input
 *    D3:  Input - Pulses from flow meter.
 *    D4:  Output - Pump Control (solid state relay).
-*    D5:  Output - LED  (Pump status indicator)
-*    D6:  Output - LED  (Warning indicator)
+*    D5:  Output - LED  (Warning indicator)
+*    D6:  Output - LED  (Pump status indicator)
 *    D7:  Input - Reset Button (short pin to ground)
 *    D9:  Output - Piezo sounder
 */  
+#include <avr/eeprom.h>
 
 // Declare functions
 int parseCmd(String cmdLine, String *key,String *value);
@@ -27,14 +28,15 @@ void setOutputPins();
 void handleSerialInput();
 void sendSerialData();
 void sendSerialSettings();
+boolean isEepromInitialised();
 
 //Arduino pin connection definitions.
 int thermPin = 0;       // Analogue input from thermistor.
 int flowPin = 3;        // pulse flow meter input.
 int flowInterrupt = 1;  // (interrupt 1 is connected to pin 3)
 int pumpPin = 4;        // solid state relay to control pump.
-int pumpIndicatorPin = 5;  // LED output to show pump state.
-int warnIndicatorPin = 6;  // LED warning indicator.
+int warnIndicatorPin = 5;  // LED warning indicator.
+int pumpIndicatorPin = 6;  // LED output to show pump state.
 int resetButtonPin = 7;    // Reset Button.
 int sounderPin = 9;        // Piezo sounder.
 
@@ -77,8 +79,8 @@ struct settings_t {
   int serRes = 100000;     //value of series resistor in the potential divider (Ohm)
 };
 
-  struct settings_t set;
-
+struct settings_t set;
+struct settings_t set_default;
 
 // Main loop period (mili-seconds)
 int dt = 1000;  //loop period (sec)
@@ -112,6 +114,15 @@ int getFlowPulseCount() {
 void setup() {                
   Serial.begin(9600);
   startMillis = millis();
+
+  if (isEepromInitialised()) {
+    Serial.println("eeprom initialised - reading settings");
+    readSettings();   
+  } else {
+    Serial.println("eeprom not initialised - saving default settings");
+    saveSettings();
+  }
+
   pinMode(thermPin, INPUT);
   pinMode(resetButtonPin, INPUT);
   pinMode(pumpPin, OUTPUT);
@@ -147,12 +158,21 @@ void loop() {
   checkTemperature();
   setWateringRate();
   checkWatering();
-  setOutputPins();
   handleSerialInput();
   checkResetButton();
 
   if (serialOutput==1) sendSerialData();
 
+  //if (warnStatus==0) {
+  //  raiseAlarm();
+  //  pumpStatus = 0;
+  //}
+  //else {
+  //  resetAlarm();
+  // pumpStatus = 1;
+  //}
+
+  setOutputPins();
   // wait for dt mili-seconds.
   delay(dt);
 }
@@ -323,11 +343,41 @@ void resetAlarm() {
   noTone(sounderPin);
 }
 
+boolean isEepromInitialised() {
+  char bytezero;
+  eeprom_read_block((void*)&bytezero,(void*)0,sizeof(bytezero));
+  if (bytezero == 255)
+    return false;
+  else
+    return true;
+}
+
+/**
+ * Save settings to EEPROM.   Sets byte 0 to 0 to show that it has been set.
+ * then writes the 'set' structure from byte 1.
+ */
+void saveSettings() {
+  // write flag to show eeprom is initialised.
+  eeprom_write_block((void*)0,(void*)1,1);
+  // write settings.
+  eeprom_write_block((void *)&set,(void*)1,sizeof(set));
+}
+
+/** 
+ * read settings from EEPROM.
+ */
+void readSettings() {
+  eeprom_read_block((void*)&set,(void*)1,sizeof(set));
+}
+
+
+
 /**
  * read bytes from serial input if available, and respond accordingly.
  */
 void handleSerialInput() {
   String k,v;
+  boolean changed = false;
   ////////////////////////////////////////////////
   // respond to commands from serial.
   ////////////////////////////////////////////////
@@ -379,28 +429,39 @@ void handleSerialInput() {
 	Serial.println("Get Data");
 	sendSerialData();
       }
+      else if (k=="defaults") {
+	Serial.println("Restore Default Settings");
+	set = set_default;
+	changed = true;
+      }
       else if (k=="bwr") {    //change baseWaterRate
 	set.baseWaterRate = v.toInt();
+	changed = true;
 	Serial.println("Set BaseWaterRate");
       }
       else if (k=="bwt") {    //change baseWaterTemp
 	set.baseWaterTemp = v.toInt();
+	changed = true;
 	Serial.println("Set BaseWaterTemp");
       }
       else if (k=="wrc") {    //change waterTempCoef
 	set.waterTempCoef = v.toInt();
+	changed = true;
 	Serial.println("Set WaterTempCoef");
       }
       else if (k=="dec") {    //change decayFac
 	set.decayFac = v.toInt();
+	changed = true;
 	Serial.println("Set DecayFac");
       }
       else if (k=="spr") {    //change sample period
 	set.samplePeriod = v.toInt();
+	changed = true;
 	Serial.println("Set SamplePeriod");
       }
       else if (k=="pwt") {    // pulse warning threshold
 	set.pulseWarnThresh = v.toInt();
+	changed = true;
 	Serial.println("PulseWarnThresh");
       }
       else {
@@ -411,6 +472,7 @@ void handleSerialInput() {
     } else {
       Serial.println(readString);
     }
+    if (changed) saveSettings();
   }
 }
 
