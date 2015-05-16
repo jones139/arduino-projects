@@ -1,0 +1,17 @@
+Soil Moisture Meter Test
+========================
+
+5V supply, connected to analogue input pin.
+
+Open Circuit in air:  1023 counts.
+Held between dry fingers: 1014 counts.
+
+Fully inserted into damp compost 295 rising to 300, then falls to 174.
+
+Add water to saturate compost (first drain from pot).  Rose initially to ~208
+Added more water to make sure it is saturated.   Rose to 265.
+Left for an hour....It settled out at 182 - very close to just damp compost.
+
+So maybe it is only good to detect dry or damp and not damp or saturated....
+
+

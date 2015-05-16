@@ -8,12 +8,14 @@
 *    Digital Input
 *    D3:  Input - Pulses from flow meter.
 *    D4:  Output - Pump Control (solid state relay).
-*    D5:  Output - LED  (Warning indicator)
+*    D5:  Not connected (faulty on prototype)
 *    D6:  Output - LED  (Pump status indicator)
-*    D7:  Input - Reset Button (short pin to ground)
+*    D7:  Output - LED  (Warning indicator)
+*    D8:  Input - Reset Button (short pin to ground)
 *    D9:  Output - Piezo sounder
 */  
 #include <avr/eeprom.h>
+
 
 // Declare functions
 int parseCmd(String cmdLine, String *key,String *value);
@@ -32,12 +34,13 @@ boolean isEepromInitialised();
 
 //Arduino pin connection definitions.
 int thermPin = 0;       // Analogue input from thermistor.
+int soilmPin = 1;       // Analogue input from soil moisture sensor.
 int flowPin = 3;        // pulse flow meter input.
 int flowInterrupt = 1;  // (interrupt 1 is connected to pin 3)
 int pumpPin = 4;        // solid state relay to control pump.
-int warnIndicatorPin = 5;  // LED warning indicator.
 int pumpIndicatorPin = 6;  // LED output to show pump state.
-int resetButtonPin = 7;    // Reset Button.
+int warnIndicatorPin = 7;  // LED warning indicator.
+int resetButtonPin = 8;    // Reset Button.
 int sounderPin = 9;        // Piezo sounder.
 
 
@@ -52,13 +55,19 @@ String readString = "";  // bytes read from serial input.
 
 float avTemp =  0.0;  // Moving average ambient temperature.
 float curTemp = 0.0;  // Current temperature
+int soilm  = 0;       // soil moisture reading (counts)
 unsigned long lastTempSampleTime = 0;  // time (millis of last temperature sample.
 unsigned long lastWateringTime = 0;
 int waterRate = 0;        // actual required water rate (mililitres/day).
 
+
+/**
+ * struct settings_t contains the main settings for the application,
+ * and defines the default values for them.
+ */
 struct settings_t {
   // watering times
-  int baseWaterRate = 10000;   // total amount of water required (mililitres/day).
+  long baseWaterRate = 10000;   // total amount of water required (mililitres/day).
   int baseWaterTemp = 18;   // temperature at which baseWaterRate is applicable.
   int waterTempCoef = 1;    // 1000*multiplcation factor to get actual water rate:	        // waterRate = baseWaterRate + baseWaterRate * waterTempCoef*(temp-baseWaterTemp)/1000 
   int nWatering = 5;      // number of times per day to water.
@@ -66,17 +75,19 @@ struct settings_t {
   // generate warning when pump is switched off.
   // Moving average calculation coefficients
   int decayFac = 100;      // 1000*decay factor in moving average calc.
-  int samplePeriod = 3600; // temperature sampling period for moving average.
+  long samplePeriod = 3600; // temperature sampling period for moving average.
 
   // Coefficients for flow rate calculation
   int mililitresPerPulse = 2;  // Depends on flow meter!
 
   // Coefficients for conversion of analogue signal from
   // thermistor to temperature in degC.
-  int thermNom = 100000;  //resistance (Ohm) at nominal temperature
+  long thermNom = 100000;  //resistance (Ohm) at nominal temperature
   int tempNom = 25;        //temperature (degC) at nominal resistance
-  int bCoEff = 3950;       //beta coefficient of themistor (usually 3000-4000)
-  int serRes = 100000;     //value of series resistor in the potential divider (Ohm)
+  long bCoEff = 3950;       //beta coefficient of themistor (usually 3000-4000)
+  int dummy = 0;
+  long serRes = 52200;     //value of series resistor in the potential divider (Ohm)
+  int dummy2 = 0;
 };
 
 struct settings_t set;
@@ -115,15 +126,24 @@ void setup() {
   Serial.begin(9600);
   startMillis = millis();
 
-  if (isEepromInitialised()) {
+  Serial.print("sizeof int=");
+  Serial.print(sizeof(int));
+  Serial.print("serRes=");
+  Serial.print(set.serRes);
+  Serial.print("dummy2=");
+  Serial.print(set.dummy2);
+
+  /*if (isEepromInitialised()) {
     Serial.println("eeprom initialised - reading settings");
     readSettings();   
   } else {
     Serial.println("eeprom not initialised - saving default settings");
     saveSettings();
   }
+  */
 
   pinMode(thermPin, INPUT);
+  pinMode(soilmPin, INPUT);
   pinMode(resetButtonPin, INPUT);
   pinMode(pumpPin, OUTPUT);
   pinMode(flowPin, INPUT);
@@ -156,6 +176,7 @@ void setup() {
 void loop() {
 
   checkTemperature();
+  checkSoilm();
   setWateringRate();
   checkWatering();
   handleSerialInput();
@@ -216,6 +237,13 @@ void checkTemperature() {
     avTemp = (set.decayFac*curTemp + (1000-set.decayFac)*avTemp)/1000;
     lastTempSampleTime = tnow;
   }
+}
+
+/**
+ *  Check soil moisture meter reading.
+ */
+void checkSoilm() {
+  soilm = analogRead(soilmPin);
 }
 
 /**
@@ -280,6 +308,8 @@ void stopWatering() {
 int parseCmd(String cmdLine, String *key,String *value) {
   int equalsPos;
   equalsPos = cmdLine.indexOf('=');
+  Serial.print("equalsPos=");
+  Serial.println(equalsPos);
   if (equalsPos==-1) {
     *key=cmdLine;
     *value="";
@@ -298,7 +328,14 @@ int parseCmd(String cmdLine, String *key,String *value) {
  */
 float countsToRes (int c) {
   float rT;
-  rT = (1.0*set.serRes * c) / (1023 - c);
+  Serial.print("countsToRes - c = ");
+  Serial.print(c);
+  Serial.print(", serRes=");
+  Serial.print(set.serRes);
+  rT = (1.0*set.serRes * c) / (1024-c );  // was 1023-c
+  rT = rT;
+  Serial.print(", rT= ");
+  Serial.println(rT);
   return (rT);
 }
 
@@ -307,10 +344,10 @@ float countsToRes (int c) {
  */
 float resToTemp (float rT) {
   float steinhart;
-  steinhart = rT / set.thermNom;  //(R/Ro)
+  steinhart = rT / (1.0*set.thermNom);  //(R/Ro)
   steinhart = log(steinhart);  //ln(R/Ro)
-  steinhart /= set.bCoEff;  //1/B * ln(R/Ro)
-  steinhart += 1.0 / (set.tempNom + 273.15);  //+(1/To)
+  steinhart /= 1.0*set.bCoEff;  //1/B * ln(R/Ro)
+  steinhart += 1.0 / (1.0*set.tempNom + 273.15);  //+(1/To)
   steinhart = 1.0 / steinhart;  //Invert
   steinhart -= 273.15;  //convert to degC
   return (steinhart);
@@ -391,9 +428,19 @@ void handleSerialInput() {
   //Serial.println (readString);
   if (readString.length()>0) {
     // wait for carriage return before processing - this works with picocom.
-    if (readString[readString.length()-1]=='\r') {
+    if (readString[readString.length()-1]=='\r' 
+	|| readString[readString.length()-1]=='\n') {
       //Serial.println("Found end of line - processing...");
-      readString[readString.length()-1]=0;  // remove carriage return from line.
+      // remove carriage return from line.
+      readString[readString.length()-1]=0;  
+      // and if we have another, remove that too...
+      if (readString[readString.length()-1]=='\r' 
+	|| readString[readString.length()-1]=='\n') 
+	readString[readString.length()-1]=0;
+
+      int i = readString[readString.length()-1];
+      Serial.println(i);
+ 
       parseCmd(readString, &k,&v);
       //Serial.print("parseCmd k=");
       //Serial.print(k);
@@ -464,6 +511,11 @@ void handleSerialInput() {
 	changed = true;
 	Serial.println("PulseWarnThresh");
       }
+      else if (k=="srv") {    // Series resistor value (in thermistor circuit).
+	set.serRes = v.toInt();
+	changed = true;
+	Serial.println("serRes");
+      }
       else {
 	Serial.print("Unrecognised Command: ");
 	Serial.println(k);
@@ -488,6 +540,8 @@ void sendSerialData() {
   Serial.print(curTemp);
   Serial.print(",avTemp:");
   Serial.print(avTemp);
+  Serial.print(",soilm:");
+  Serial.print(soilm);
   Serial.print(",waterRate:");
   Serial.print(waterRate);
   Serial.print(",flowPulseCount:");
@@ -511,6 +565,8 @@ void sendSerialSettings() {
   Serial.print(set.decayFac);
   Serial.print(",spr:");
   Serial.print(set.samplePeriod);
+  Serial.print(",srv:");
+  Serial.print(set.serRes);
   Serial.print(",pwt:");
   Serial.print(set.pulseWarnThresh);
   Serial.println("}}");
