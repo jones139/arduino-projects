@@ -85,9 +85,7 @@ struct settings_t {
   long thermNom = 100000;  //resistance (Ohm) at nominal temperature
   int tempNom = 25;        //temperature (degC) at nominal resistance
   long bCoEff = 3950;       //beta coefficient of themistor (usually 3000-4000)
-  int dummy = 0;
-  long serRes = 52200;     //value of series resistor in the potential divider (Ohm)
-  int dummy2 = 0;
+  long serRes = 100000;     //value of series resistor in the potential divider (Ohm)
 };
 
 struct settings_t set;
@@ -126,21 +124,14 @@ void setup() {
   Serial.begin(9600);
   startMillis = millis();
 
-  Serial.print("sizeof int=");
-  Serial.print(sizeof(int));
-  Serial.print("serRes=");
-  Serial.print(set.serRes);
-  Serial.print("dummy2=");
-  Serial.print(set.dummy2);
-
-  /*if (isEepromInitialised()) {
+  if (isEepromInitialised()) {
     Serial.println("eeprom initialised - reading settings");
     readSettings();   
   } else {
     Serial.println("eeprom not initialised - saving default settings");
     saveSettings();
   }
-  */
+  
 
   pinMode(thermPin, INPUT);
   pinMode(soilmPin, INPUT);
@@ -328,14 +319,8 @@ int parseCmd(String cmdLine, String *key,String *value) {
  */
 float countsToRes (int c) {
   float rT;
-  Serial.print("countsToRes - c = ");
-  Serial.print(c);
-  Serial.print(", serRes=");
-  Serial.print(set.serRes);
   rT = (1.0*set.serRes * c) / (1024-c );  // was 1023-c
   rT = rT;
-  Serial.print(", rT= ");
-  Serial.println(rT);
   return (rT);
 }
 
@@ -434,18 +419,31 @@ void handleSerialInput() {
       // remove carriage return from line.
       readString[readString.length()-1]=0;  
       // and if we have another, remove that too...
-      if (readString[readString.length()-1]=='\r' 
-	|| readString[readString.length()-1]=='\n') 
-	readString[readString.length()-1]=0;
+      if (readString[readString.length()-2]=='\r' 
+	|| readString[readString.length()-2]=='\n') 
+	readString[readString.length()-2]=0;
 
       int i = readString[readString.length()-1];
       Serial.println(i);
  
       parseCmd(readString, &k,&v);
+      k.trim();
+      v.trim();
       //Serial.print("parseCmd k=");
       //Serial.print(k);
       //Serial.print(", v=");
       //Serial.println(v);
+      Serial.println(k);
+      /*i=0;
+      for (i=0;i<k.length()-1;i++) {
+	Serial.print(k[i]);
+	Serial.print(":");
+	Serial.print((int)k[i]);
+	Serial.print(",");
+      }
+      Serial.println();
+      */
+
       
       // First check single word commands (no value provided).
       if (k=="dataon") {
