@@ -21,7 +21,8 @@
 int parseCmd(String cmdLine, String *key,String *value);
 float resToTemp (float rT);
 float countsToRes (int c);
-int p2v(int p);
+long getFlowPulseCount();
+int p2v(long p);
 void setWateringRate();
 void checkWatering();
 void startWatering();
@@ -45,7 +46,7 @@ int sounderPin = 9;        // Piezo sounder.
 
 
 // State Variables
-volatile int flowPulseCount = 0; // Flow meter pulse counts.
+volatile long flowPulseCount = 0; // Flow meter pulse counts.
 int pumpStatus = 0;   // Current pump on/off status.
 int warnStatus = 0;   // Current warning status.
 int serialOutput=0; // By default serial output of data is off, until
@@ -67,18 +68,18 @@ int waterRate = 0;        // actual required water rate (mililitres/day).
  */
 struct settings_t {
   // watering times
-  long baseWaterRate = 10000;   // total amount of water required (mililitres/day).
+  long baseWaterRate = 14000;   // total amount of water required (mililitres/day).
   int baseWaterTemp = 18;   // temperature at which baseWaterRate is applicable.
   int waterTempCoef = 1;    // 1000*multiplcation factor to get actual water rate:	        // waterRate = baseWaterRate + baseWaterRate * waterTempCoef*(temp-baseWaterTemp)/1000 
-  int nWatering = 5;      // number of times per day to water.
-  int pulseWarnThresh = 10;  // Number of flow meter pulses required to 
+  int nWatering = 24;      // number of times per day to water.
+  int pulseWarnThresh = 20;  // Number of flow meter pulses required to 
   // generate warning when pump is switched off.
   // Moving average calculation coefficients
   int decayFac = 100;      // 1000*decay factor in moving average calc.
   long samplePeriod = 3600; // temperature sampling period for moving average.
 
   // Coefficients for flow rate calculation
-  int mililitresPerPulse = 2;  // Depends on flow meter!
+  long pulsesPerLitre = 3975;  // Depends on flow meter!
 
   // Coefficients for conversion of analogue signal from
   // thermistor to temperature in degC.
@@ -113,7 +114,7 @@ void resetFlowPulseCount() {
  * return the current flow meter pulse count.
  * FIXME - may need to disable interrupts while we do this.
  */
-int getFlowPulseCount() {
+long getFlowPulseCount() {
   return (flowPulseCount);
 }
 
@@ -264,7 +265,7 @@ void checkWatering() {
   } else {
     // Is it time to stop watering.
     float curVol = p2v(getFlowPulseCount());
-    if (curVol > waterRate) {
+    if (curVol > waterRate/set.nWatering) {
       stopWatering();
     }
   }
@@ -341,8 +342,8 @@ float resToTemp (float rT) {
 /**
  * Convert a number of flow meter pulses p into volume of water in mililitres.
  */
-int p2v(int p) {
-  return (p*set.mililitresPerPulse);
+int p2v(long p) {
+  return (1000*p/set.pulsesPerLitre);
 
 }
 
@@ -479,15 +480,30 @@ void handleSerialInput() {
 	set = set_default;
 	changed = true;
       }
+      else if (k=="ppl") {    //change pulsesPerLitre
+	set.pulsesPerLitre = v.toInt();
+	changed = true;
+	Serial.println("Set pulsesPerLitre");
+      }
       else if (k=="bwr") {    //change baseWaterRate
 	set.baseWaterRate = v.toInt();
 	changed = true;
-	Serial.println("Set BaseWaterRate");
+	Serial.println("Set BaseWaterRate (ml)");
+      }
+      else if (k=="bwr") {    //change baseWaterRate
+	set.baseWaterRate = v.toInt();
+	changed = true;
+	Serial.println("Set BaseWaterRate (ml)");
+      }
+      else if (k=="nwa") {    //change nWatering
+	set.nWatering = v.toInt();
+	changed = true;
+	Serial.println("Set nWatering");
       }
       else if (k=="bwt") {    //change baseWaterTemp
 	set.baseWaterTemp = v.toInt();
 	changed = true;
-	Serial.println("Set BaseWaterTemp");
+	Serial.println("Set BaseWaterTemp (degC)");
       }
       else if (k=="wrc") {    //change waterTempCoef
 	set.waterTempCoef = v.toInt();
@@ -542,8 +558,8 @@ void sendSerialData() {
   Serial.print(soilm);
   Serial.print(",waterRate:");
   Serial.print(waterRate);
-  Serial.print(",flowPulseCount:");
-  Serial.print(flowPulseCount);
+  Serial.print(",curVol:");
+  Serial.print(p2v(getFlowPulseCount()));
   Serial.print(",pump:");
   Serial.print(pumpStatus);
   Serial.print(",warn:");
@@ -553,8 +569,12 @@ void sendSerialData() {
 
 void sendSerialSettings() {
   Serial.print("{set:{");
-  Serial.print("bwr:");
+  Serial.print("ppl:");
+  Serial.print(set.pulsesPerLitre);
+  Serial.print(",bwr:");
   Serial.print(set.baseWaterRate);
+  Serial.print(",nwa:");
+  Serial.print(set.nWatering);
   Serial.print(",bwt:");
   Serial.print(set.baseWaterTemp);
   Serial.print(",wrc:");
