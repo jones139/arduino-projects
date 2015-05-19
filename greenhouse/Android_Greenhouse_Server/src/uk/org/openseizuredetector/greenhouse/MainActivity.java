@@ -23,7 +23,6 @@
 
 package uk.org.openseizuredetector.greenhouse;
 
-import android.app.ActionBar;
 import android.app.Activity;
 import android.app.IntentService;
 import android.app.ActivityManager;
