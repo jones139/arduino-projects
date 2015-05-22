@@ -38,31 +38,30 @@ public class GreenHouseData implements Parcelable {
     private final static String TAG = "GreenHouseData";
     /* Analysis settings */
     public boolean haveSettings = false;   // flag to say if we have received settings or not.
-    public long alarmFreqMin;
-    public long alarmFreqMax;
-    public long nMin;
-    public long nMax;
-    public long warnTime;
-    public long alarmTime;
-    public long alarmThresh;
-    public long alarmRatioThresh;
-    public long batteryPc;
+    // Settings
+    private int pulsesPerLitre = 0;
+    private int baseWaterRate = 0;
+    private int nWatering = 1;
+    private int baseWaterTemp = 18;
+    private int waterTempCoef = 1;
+    private int decayFac = 1;
+    private int samplePeriod = 3600;
+    private int serRes=100000;
+    private int pulseWarnThresh = 20;
 
-    /* Analysis results */
-    public Time dataTime;
-    public long alarmState;
-    public long maxVal;
-    public long maxFreq;
-    public long specPower;
-    public long roiPower;
-    public String alarmPhrase;
-    public int simpleSpec[];
-    public boolean pebbleConnected = false;
-    public boolean pebbleAppRunning = false;
-    public boolean serverOK = false;
+    // variable data
+    private Time dataTime;
+    private int timeMs = 0;
+    private float curTemp = 0;
+    private float avTemp = 0;
+    private int soilm = 0;
+    private int waterRate = 0;
+    private int curVol = 0;
+    private int pumpStatus = 0;
+    private int warnStatus = 0;
+
 
     public GreenHouseData() {
-	simpleSpec = new int[10];
 	dataTime = new Time(Time.getCurrentTimezone());
     }
 
@@ -74,27 +73,7 @@ public class GreenHouseData implements Parcelable {
 	try {
 	    JSONObject jo = new JSONObject(jsonStr);
 	    Log.v(TAG,"fromJSON(): jo = "+jo.toString());
-	    Log.v(TAG,"fromJSON(): dataTimeStr="+jo.optString("dataTimeStr"));
-	    //Calendar cal = Calendar.getInstance();
-	    //SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMddTHHmmss", Locale.UK);
-	    //cal.setTime(sdf.parse(jo.optString("dataTimeStr")));
-	    //dataTime = cal.getTime();
-	    // FIXME - this doesn't work!!!
-	    dataTime.setToNow();
-	    Log.v(TAG,"fromJSON(): dataTime = "+dataTime.toString());
-	    maxVal = jo.optInt("maxVal");
-	    maxFreq = jo.optInt("maxFreq");
-	    specPower = jo.optInt("specPower");
-	    roiPower = jo.optInt("roiPower");
-	    batteryPc = jo.optInt("batteryPc");
-	    pebbleConnected = jo.optBoolean("pebbleConnected");
-	    pebbleAppRunning = jo.optBoolean("pebbleAppRunning");
-	    alarmState = jo.optInt("alarmState");
-	    alarmPhrase = jo.optString("alarmPhrase");
-	    JSONArray specArr = jo.optJSONArray("simpleSpec");
-	    for (int i=0;i<specArr.length();i++) {
-		simpleSpec[i] = specArr.optInt(i);
-	    }
+	    
 	    return true;
 	} catch (Exception e) {
 	    Log.v(TAG,"fromJSON() - error parsing result");

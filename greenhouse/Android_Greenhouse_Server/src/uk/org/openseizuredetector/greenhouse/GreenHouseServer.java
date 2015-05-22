@@ -180,6 +180,8 @@ public class GreenHouseServer extends Service
     @Override
     public void onDestroy() {
 	Log.v(TAG,"onDestroy(): GreenHouseServer Service stopping");
+
+	mGc.stop();
 	// release the wake lock to allow CPU to sleep and reduce
 	// battery drain.
 	if (mWakeLock!=null) {
@@ -232,8 +234,18 @@ public class GreenHouseServer extends Service
      */
     private void startGreenHouseController() {
 	Log.v(TAG,"startGreenHouseController()");
-	mGc = new GreenHouseController(mGd);
+	mGc = new GreenHouseController(mGd,"HC-06");
+	mGc.start();
 	mGc.waterOff();
+    }
+
+    /**
+     * Stop the greenhouse controller (communications with arduino 
+     * microcontroller via bluetooth.
+     */
+    private void stopGreenHouseController() {
+	Log.v(TAG,"startGreenHouseController()");
+	mGc.stop();
     }
 
 

@@ -3,12 +3,13 @@
       package="uk.org.openseizuredetector.greenhouse"
       android:versionCode="1"
       android:versionName="0.1">
-  <uses-sdk android:minSdkVersion="8" />
+  <uses-sdk android:minSdkVersion="15" />
   <uses-permission android:name="android.permission.INTERNET" />
   <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
   <uses-permission android:name="android.permission.WAKE_LOCK" />
   <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
   <uses-permission android:name="android.permission.BLUETOOTH"/>
+  <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"/>
   <application android:label="Greenhouse Controller" 
 	       >
     <activity android:name="MainActivity"
