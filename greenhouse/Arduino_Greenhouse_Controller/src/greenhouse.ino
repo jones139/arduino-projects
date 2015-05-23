@@ -47,6 +47,8 @@ int sounderPin = 9;        // Piezo sounder.
 
 // State Variables
 volatile long flowPulseCount = 0; // Flow meter pulse counts.
+long lastFlowPulseCount = 0;  // flow meter pulse count at last main loop iteration.
+unsigned long flowFailStartMillis = 0;  // time when we first detected zero
 int pumpStatus = 0;   // Current pump on/off status.
 int warnStatus = 0;   // Current warning status.
 int serialOutput=0; // By default serial output of data is off, until
@@ -74,6 +76,8 @@ struct settings_t {
   int nWatering = 24;      // number of times per day to water.
   int pulseWarnThresh = 20;  // Number of flow meter pulses required to 
   // generate warning when pump is switched off.
+  unsigned long flowFailTimeout = 10;  // Number of seconds for which zero flow rate is
+                            // recorded before the system trips with a flow fail                            // fault.
   // Moving average calculation coefficients
   int decayFac = 100;      // 1000*decay factor in moving average calc.
   long samplePeriod = 3600; // temperature sampling period for moving average.
@@ -155,6 +159,10 @@ void setup() {
   avTemp = curTemp;
   setWateringRate();
 
+  // Set up flow fail monitoring variables.
+  lastFlowPulseCount = 0;
+  flowFailStartMillis = 0;  // Zero means we are not timing out.
+
   // Switch everything off initially.
   pumpStatus = 0;
   warnStatus = 0;
@@ -171,19 +179,15 @@ void loop() {
   checkSoilm();
   setWateringRate();
   checkWatering();
+  checkFlowFail();
   handleSerialInput();
   checkResetButton();
 
-  if (serialOutput==1) sendSerialData();
+  // Trip the pump if we have a warning condition.
+  if (warnStatus==1)
+    pumpStatus = 0;
 
-  //if (warnStatus==0) {
-  //  raiseAlarm();
-  //  pumpStatus = 0;
-  //}
-  //else {
-  //  resetAlarm();
-  // pumpStatus = 1;
-  //}
+  if (serialOutput==1) sendSerialData();
 
   setOutputPins();
   // wait for dt mili-seconds.
@@ -271,6 +275,48 @@ void checkWatering() {
   }
 }
 
+
+/**
+ * Check for failure of the system to deliver flow (pump running but no
+ * indicated flow rate.
+ * sets warnStatus if flow failure is detected.
+ */
+void checkFlowFail() {
+  long curFlowPulseCount;
+  if (pumpStatus == 0) {
+    lastFlowPulseCount = 0;
+    flowFailStartMillis = 0;
+  } else {
+    curFlowPulseCount = getFlowPulseCount();
+    if (curFlowPulseCount == lastFlowPulseCount) {
+      Serial.println("No Flow detected....");
+      // flow has not increased since last call of this function?
+      if (flowFailStartMillis == 0) {
+	Serial.println("Starting timeout...");
+        // This is the first call when flow has not increased so start timeout.
+	flowFailStartMillis = millis();
+      } else {
+	Serial.println("Timing out...");
+	Serial.print("millis = ");
+	Serial.print(millis());
+	Serial.print(", flowFailStartMillis = ");
+	Serial.print(flowFailStartMillis);
+	Serial.print(" timeout = ");
+	Serial.print(set.flowFailTimeout);
+	Serial.println();
+	// we are already timing out so check if timeout has expired
+	if ((millis() - flowFailStartMillis) > set.flowFailTimeout*1000) {
+	  Serial.println("Timed out - Tripping pump");
+	  // Timeout exceeded - raise alarm and stop pump.
+	  warnStatus = 1;
+	  pumpStatus = 0;
+	}
+      }
+    }
+  }
+  lastFlowPulseCount = curFlowPulseCount;
+
+}
 
 /**
  * Start watering - will dispense waterRate mililitres of water.
@@ -480,6 +526,11 @@ void handleSerialInput() {
 	set = set_default;
 	changed = true;
       }
+      else if (k=="fft") {    //change flowFailTimeout
+	set.flowFailTimeout = v.toInt();
+	changed = true;
+	Serial.println("Set flowFailTimeout()");
+      }
       else if (k=="ppl") {    //change pulsesPerLitre
 	set.pulsesPerLitre = v.toInt();
 	changed = true;
@@ -585,6 +636,8 @@ void sendSerialSettings() {
   Serial.print(set.samplePeriod);
   Serial.print(",srv:");
   Serial.print(set.serRes);
+  Serial.print(",fft:");
+  Serial.print(set.flowFailTimeout);
   Serial.print(",pwt:");
   Serial.print(set.pulseWarnThresh);
   Serial.println("}}");
