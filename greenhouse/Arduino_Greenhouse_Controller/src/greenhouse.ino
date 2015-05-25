@@ -264,6 +264,10 @@ void checkWatering() {
     } else
       // Check for leaks - pulses increasing with pump stopped
       if (getFlowPulseCount() > set.pulseWarnThresh) {
+	Serial.print("Leak Detected - flowPulseCount = ");
+	Serial.print(getFlowPulseCount());
+	Serial.print(", Threshold = ");
+	Serial.println(set.pulseWarnThresh);
 	raiseAlarm();
     }
   } else {
@@ -308,7 +312,7 @@ void checkFlowFail() {
 	if ((millis() - flowFailStartMillis) > set.flowFailTimeout*1000) {
 	  Serial.println("Timed out - Tripping pump");
 	  // Timeout exceeded - raise alarm and stop pump.
-	  warnStatus = 1;
+	  raiseAlarm();
 	  pumpStatus = 0;
 	}
       }
@@ -399,6 +403,7 @@ int p2v(long p) {
  * Raise the warning alarm.
  */
 void raiseAlarm() {
+  Serial.println("raiseAlarm");
   warnStatus = 1;
   tone(sounderPin,500);
 }
