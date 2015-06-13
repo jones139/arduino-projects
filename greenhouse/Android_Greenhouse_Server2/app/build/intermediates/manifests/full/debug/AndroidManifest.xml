@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="uk.org.openseizuredetector.greenhouse"
+    android:versionCode="1"
+    android:versionName="0.1" >
+
+    <uses-sdk
+        android:minSdkVersion="15"
+        android:targetSdkVersion="15" />
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.BLUETOOTH" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+
+    <application android:label="Greenhouse Controller" >
+        <activity
+            android:name="uk.org.openseizuredetector.greenhouse.MainActivity"
+            android:icon="@drawable/icon"
+            android:label="Greenhouse Controller" >
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name="uk.org.openseizuredetector.greenhouse.PrefActivity"
+            android:icon="@drawable/icon"
+            android:label="Preferences" >
+        </activity>
+
+        <service
+            android:name="uk.org.openseizuredetector.greenhouse.GreenHouseServer"
+            android:exported="false" />
+    </application>
+
+</manifest>
