@@ -1,6 +1,8 @@
 
+#include <EEPROM.h>
+
 // Fixed Parameters
-int DEBUG = 1;
+int DEBUG = 0;
 int STEP_PIN = 2;     // output pin to tell motor controller to step.
 int DIR_OUT_PIN = 3;  // output pin to set motor controller direction.
 int POS_1_PIN = 4;    // pin to request position 1
@@ -10,18 +12,68 @@ int POS_4_PIN = 7;    // pin to request position 4
 int HOME_PIN = 8;     // home switch pin.
 int MOVE_PIN = 9;     // input from manual move button.
 int DIR_IN_PIN = 10;  // input from manual move direction button.
-int PULSES_PER_REV = 20000;   // number of pulses to give one revolution of the motor.
+int PULSES_PER_REV = 16384;   // number of pulses to give one revolution of the motor.
+                              // guessed - measured 16412, 16442, 16532.
 
 int POS_1 = 1000;
 int POS_2 = 2000;
 int POS_3 = 3000;
 int POS_4 = 4000;
 
+int presets[] = {0,1000,2000,3000,4000};
+
 long POS_REPORT_PERIOD = 1000;
 
 // Global Variables
 int curPos = 0;  // Current motor position.
 long lastPosReportTime = 0;  // last time we reported position to serial monitor.
+int programMode = 0;  // 0 = not programming 1-4 = setting preset 1-4.
+
+
+/**
+ * readPresets() - read the presets[] array from eeprom
+ */
+void readPresets() {
+  // Blank eeprom shoudl have 255 in each byte.
+  if (EEPROM.read(0) == 255 && EEPROM.read(1) == 255) {
+    if (DEBUG) Serial.println("EEPROM not initialised");
+    writePresets();
+    return;
+  } else {
+    Serial.println("initialising from EEPROM");
+    char *b = (char*)presets;
+    for (int addr = 0; addr<sizeof(presets);addr++) {
+      b[addr] = EEPROM.read(addr);
+    }
+    if (1) {
+       for(int i=0;i<5;i++) {
+        Serial.print(presets[i]);
+        Serial.print(",");
+       }
+      Serial.println(); 
+    }
+  } 
+ }
+ 
+ 
+/**
+ * writePresets() - write the presets[] array to eeprom
+ */ 
+void writePresets() {
+  Serial.println("Writing to EEPROM");
+  char *b = (char*)presets;
+  for (int addr = 0; addr<sizeof(presets);addr++) {
+    EEPROM.write(addr,b[addr]);
+  } 
+    if (1) {
+       for(int i=0;i<5;i++) {
+        Serial.print(presets[i]);
+        Serial.print(",");
+       }
+      Serial.println(); 
+    }
+
+}
 
 /**
 * doStep - do a single step of the motor
@@ -71,30 +123,66 @@ void findHome() {
   if (DEBUG) Serial.println("findHome - complete");
 }
 
+
+/** getPresetButtonPressed() - returns the number of the 
+ * preset button that is pressed, or 0 if no preset buttons
+ * are pressed.  Note, if more than one button is pressed,
+ * returns the lowest id of the pressed buttons.
+ */
+int getPresetButtonPressed() {
+  int buttonId = 0;
+  if (digitalRead(POS_4_PIN) == 0) {
+    if (DEBUG) Serial.println("Preset 4 Pressed");
+    buttonId = 4;
+  }
+  if (digitalRead(POS_3_PIN) == 0) {
+    if (DEBUG) Serial.println("Preset 3 Pressed");
+    buttonId = 3;
+  }
+  if (digitalRead(POS_2_PIN) == 0) {
+    if (DEBUG) Serial.println("Preset 2 Pressed");
+    buttonId = 2;
+  }
+  if (digitalRead(POS_1_PIN) == 0) {
+    if (DEBUG) Serial.println("Preset 1 Pressed");
+    buttonId = 1;
+  }
+  return(buttonId);
+}
+
 /**
 * processButtons() - poll the position of the buttons and
 * react accordingly.
 */
 void processButtons() {
+  // check which preset button is pressed (zero if none pressed)
+  int presetButtonId = getPresetButtonPressed();
+  // if we have just released the preset button and we were in
+  // programming mode, save the new presets.
+  if (presetButtonId==0 && programMode!=0) {
+    presets[programMode] = curPos;
+    // Save presets to EEPROM.
+    writePresets();
+    // leave programming mode.
+    programMode = 0;
+  }
+  // If we press a preset without the move button, just go to that
+  // preset.
+  if (presetButtonId!=0 && digitalRead(MOVE_PIN)==1) {
+    if (DEBUG) Serial.print("Moving to Preset ");
+    if (DEBUG) Serial.print(presetButtonId);
+    if (DEBUG) Serial.print(" - pos=");
+    if (DEBUG) Serial.println(presets[presetButtonId]);
+    gotoPos(presets[presetButtonId]);
+  }
   if (digitalRead(MOVE_PIN)==0) {
-     doStep(digitalRead(DIR_IN_PIN));
+      doStep(digitalRead(DIR_IN_PIN));
+      if (presetButtonId!=0) {
+        programMode = presetButtonId;
+        if (DEBUG) Serial.println("updating preset value");
+        presets[programMode] = curPos;
+      }
       delayMicroseconds(1000); 
-  }  else if (digitalRead(POS_1_PIN) == 0) {
-    if (DEBUG) Serial.println("Moving to POS_1");
-    gotoPos(POS_1);
-    if (DEBUG) Serial.println("Move to POS_1 complete");
-  } else if (digitalRead(POS_2_PIN) == 0) {
-    if (DEBUG) Serial.println("Moving to POS_2");
-    gotoPos(POS_2);
-    if (DEBUG) Serial.println("Move to POS_2 complete");
-  } else if (digitalRead(POS_3_PIN) == 0) {
-    if (DEBUG) Serial.println("Moving to POS_3");
-    gotoPos(POS_3);
-    if (DEBUG) Serial.println("Move to POS_3 complete");
-  } else if (digitalRead(POS_4_PIN) == 0) {
-    if (DEBUG) Serial.println("Moving to POS_4");
-    gotoPos(POS_4);
-    if (DEBUG) Serial.println("Move to POS_4 complete");
   }
   
   
@@ -104,7 +192,9 @@ void processButtons() {
 }
 
 void setup() {
-  if (DEBUG) Serial.begin(9600);
+  if (1) Serial.begin(9600);
+  
+  readPresets();
 
   pinMode(STEP_PIN,OUTPUT);
   pinMode(DIR_OUT_PIN,OUTPUT);
