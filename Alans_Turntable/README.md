@@ -18,15 +18,15 @@ them down to ground.  No pull-up resistors are required as we make use of the
 internal ones in the arduino microcontroller.
 
 The following pins are used:
-D2 - output - step signal for motor drive board.
-D3 - output - direction signal for motor drive board.
-D4 - input - Position 1 button
-D5 - input - Position 2 button
-D6 - input - Position 3 button
-D7 - input - Position 4 button
-D8 - input - home position detection.
-D9 - input - Manual Move button.
-D10 - input - Direction switch for manual move.
+  * D2 - output - step signal for motor drive board.
+  * D3 - output - direction signal for motor drive board.
+  * D4 - input - Position 1 button
+  * D5 - input - Position 2 button
+  * D6 - input - Position 3 button
+  * D7 - input - Position 4 button
+  * D8 - input - home position detection.
+  * D9 - input - Manual Move button.
+  * D10 - input - Direction switch for manual move.
 
 The pre-set positions are set in the array presets[], which is stored in
 EEPROM so the presets are rememberd following power-off.
