@@ -2,7 +2,7 @@
 #include <EEPROM.h>
 
 // Fixed Parameters
-int DEBUG = 0;
+int DEBUG = 1;
 int STEP_PIN = 2;     // output pin to tell motor controller to step.
 int DIR_OUT_PIN = 3;  // output pin to set motor controller direction.
 int POS_1_PIN = 4;    // pin to request position 1
@@ -117,9 +117,10 @@ void gotoPos(int pos) {
 */
 void findHome() {
   if (DEBUG) Serial.println("findHome - scanning");
-  while (digitalRead(HOME_PIN)) {
+  while (!digitalRead(HOME_PIN)) {
     doStep(1);
   }
+  curPos = 0;
   if (DEBUG) Serial.println("findHome - complete");
 }
 
@@ -199,7 +200,7 @@ void setup() {
   pinMode(STEP_PIN,OUTPUT);
   pinMode(DIR_OUT_PIN,OUTPUT);
   pinMode(HOME_PIN,INPUT);
-  digitalWrite(HOME_PIN,1);  // set pull up resistors.
+  //digitalWrite(HOME_PIN,1);  // set pull up resistors.
 
   pinMode(MOVE_PIN,INPUT);
   digitalWrite(MOVE_PIN,1);
