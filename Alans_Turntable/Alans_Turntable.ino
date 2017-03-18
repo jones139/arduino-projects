@@ -9,7 +9,7 @@ int POS_1_PIN = 7;    // pin to request position 1
 int POS_2_PIN = 6;    // pin to request position 2
 int POS_3_PIN = 5;    // pin to request position 3
 int POS_4_PIN = 4;    // pin to request position 4
-int pos_5_pin = 11;   // pin to request position 5
+int POS_5_PIN = 11;   // pin to request position 5
 int HOME_PIN = 8;     // home switch pin.
 int MOVE_PIN = 9;     // input from manual move button.
 int DIR_IN_PIN = 10;  // input from manual move direction button.
@@ -137,8 +137,8 @@ int getPresetButtonPressed() {
   
  
   int buttonId = 0;
-  if (digitalRead(p0S_5_PIN) == 0) {
-    if (DEBUG) Serial.printin("preset 5 pressed");
+  if (digitalRead(POS_5_PIN) == 0) {
+    if (DEBUG) Serial.println("preset 5 pressed");
   }
   if (digitalRead(POS_4_PIN) == 0) {
     if (DEBUG) Serial.println("Preset 4 Pressed");
@@ -225,7 +225,7 @@ void setup() {
   pinMode(POS_4_PIN,INPUT);
   digitalWrite(POS_4_PIN,1);
   pinMode(POS_5_PIN,INPUT);
-  digitalWrite(pos_5_PIN,1);
+  digitalWrite(POS_5_PIN,1);
   
 
   lastPosReportTime = millis();
