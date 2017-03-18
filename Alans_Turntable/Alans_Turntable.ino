@@ -5,10 +5,11 @@
 int DEBUG = 1;
 int STEP_PIN = 2;     // output pin to tell motor controller to step.
 int DIR_OUT_PIN = 3;  // output pin to set motor controller direction.
-int POS_1_PIN = 4;    // pin to request position 1
-int POS_2_PIN = 5;    // pin to request position 2
-int POS_3_PIN = 6;    // pin to request position 3
-int POS_4_PIN = 7;    // pin to request position 4
+int POS_1_PIN = 7;    // pin to request position 1
+int POS_2_PIN = 6;    // pin to request position 2
+int POS_3_PIN = 5;    // pin to request position 3
+int POS_4_PIN = 4;    // pin to request position 4
+int pos_5_pin = 11;   // pin to request position 5
 int HOME_PIN = 8;     // home switch pin.
 int MOVE_PIN = 9;     // input from manual move button.
 int DIR_IN_PIN = 10;  // input from manual move direction button.
@@ -19,15 +20,16 @@ int POS_1 = 1000;
 int POS_2 = 2000;
 int POS_3 = 3000;
 int POS_4 = 4000;
+int pos_5 = 5000;
 
-int presets[] = {0,1000,2000,3000,4000};
+int presets[] = {0,1000,2000,3000,4000,5000};
 
 long POS_REPORT_PERIOD = 1000;
 
 // Global Variables
 int curPos = 0;  // Current motor position.
 long lastPosReportTime = 0;  // last time we reported position to serial monitor.
-int programMode = 0;  // 0 = not programming 1-4 = setting preset 1-4.
+int programMode = 0;  // 0 = not programming 1-5 = setting preset 1-5.
 
 
 /**
@@ -35,6 +37,7 @@ int programMode = 0;  // 0 = not programming 1-4 = setting preset 1-4.
  */
 void readPresets() {
   // Blank eeprom shoudl have 255 in each byte.
+  //writePresets();
   if (EEPROM.read(0) == 255 && EEPROM.read(1) == 255) {
     if (DEBUG) Serial.println("EEPROM not initialised");
     writePresets();
@@ -84,7 +87,7 @@ void doStep(int dir) {
      digitalWrite(STEP_PIN,LOW) ;
      // Delay sets the speed - if it is less than 300 the motor stutters and does not move.
      // larger number = slower rotation.
-     delayMicroseconds(350);  
+     delayMicroseconds(950);  
      if (dir>0) 
        curPos++;
        //if (curPos>PULSES_PER_REV) {
@@ -113,7 +116,7 @@ void gotoPos(int pos) {
 
 /**
 * findHome sweeps in the clockwise direction until the home position
-* is found , signified by pin HOME_PIN going low.
+* is found , signified by pin HOME_PIN going low.HI
 */
 void findHome() {
   if (DEBUG) Serial.println("findHome - scanning");
@@ -131,7 +134,12 @@ void findHome() {
  * returns the lowest id of the pressed buttons.
  */
 int getPresetButtonPressed() {
+  
+ 
   int buttonId = 0;
+  if (digitalRead(p0S_5_PIN) == 0) {
+    if (DEBUG) Serial.printin("preset 5 pressed");
+  }
   if (digitalRead(POS_4_PIN) == 0) {
     if (DEBUG) Serial.println("Preset 4 Pressed");
     buttonId = 4;
@@ -216,6 +224,9 @@ void setup() {
   digitalWrite(POS_3_PIN,1);
   pinMode(POS_4_PIN,INPUT);
   digitalWrite(POS_4_PIN,1);
+  pinMode(POS_5_PIN,INPUT);
+  digitalWrite(pos_5_PIN,1);
+  
 
   lastPosReportTime = millis();
 
