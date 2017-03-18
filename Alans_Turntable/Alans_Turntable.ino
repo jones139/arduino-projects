@@ -26,11 +26,37 @@ int presets[] = {0,1000,2000,3000,4000,5000};
 
 long POS_REPORT_PERIOD = 1000;
 
+// 0 - just try to go directly to new position.
+const int MOVE_MODE_SIMPLE = 0;
+// 1 - return to zero in anticlockwise direction before
+//  moving so we always approach from same direction.
+const int MOVE_MODE_TO_ZERO = 1;
+// 1 - move in anticlockwise direction, overshoot required
+// position by OVERSHOOT steps, then approach from
+// clockwise direction.
+const int MOVE_MODE_OVERSHOOT = 2;  
+// 3 - move directly to new position, allowing for
+// HYSTERESIS steps of backlash in the gearbox.
+const int MOVE_MODE_HYSTERESIS = 3; 
+
+int HYSTERESIS = 50;  // Number of steps of backlash in gears - only used for
+                      //  MOVE_MODE_HYSTERESIS
+int OVERSHOOT = 200;  // amount to overshoot required position, so we can
+                      // approach from clockwise direction (only used for
+                      //   MOVE_MODE_OVERSHOOT)
+
+
+
+
 // Global Variables
 int curPos = 0;  // Current motor position.
 long lastPosReportTime = 0;  // last time we reported position to serial monitor.
 int programMode = 0;  // 0 = not programming 1-5 = setting preset 1-5.
 
+//////////////////////////////////////////////////////
+// Set the moveMode to handle hysteresis in gearbox //
+//////////////////////////////////////////////////////
+int moveMode = 0;
 
 /**
  * readPresets() - read the presets[] array from eeprom
@@ -107,10 +133,41 @@ void doStep(int dir) {
 */
 void gotoPos(int pos) {
   int dir = 0;
-  if (curPos<pos) dir = 1;
-  
-  while(curPos!=pos)
-    doStep(dir);
+
+  switch (moveMode) {
+  case MOVE_MODE_SIMPLE:
+    if (curPos<pos) dir = 1;
+    while(curPos!=pos)
+      doStep(dir);
+    break;
+  case MOVE_MODE_TO_ZERO:
+    // go anticlockwise to zero position
+    while(curPos!=0)
+      doStep(0);
+    // then go clockwise to required position
+    while(curPos!=pos)
+      doStep(1);
+    break;
+  case MOVE_MODE_OVERSHOOT:
+    // go anticlockwise to required position, less OVERSHOOT
+    while(curPos!=pos-OVERSHOOT)
+      doStep(0);
+    // then go clockwise to required position
+    while(curPos!=pos)
+      doStep(1);
+    break;
+  case MOVE_MODE_HYSTERESIS:
+    if (curPos<pos) {
+      // then go clockwise to required position
+      while(curPos!=pos)
+	doStep(1);
+    } else {
+      // go anticlockwise to required position, less HYSTERESIS
+      while(curPos!=pos-HYSTERESIS)
+	doStep(0);
+      break;
+    }
+  }    
 }
 
 
@@ -251,5 +308,3 @@ void loop()
      lastPosReportTime = millis(); 
   }
 }
-
-
