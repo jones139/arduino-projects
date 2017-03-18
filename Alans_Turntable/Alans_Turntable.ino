@@ -142,16 +142,18 @@ void gotoPos(int pos) {
     break;
   case MOVE_MODE_TO_ZERO:
     // go anticlockwise to zero position
+    if (curPos<0) dir = 1;
     while(curPos!=0)
-      doStep(0);
+      doStep(dir);
     // then go clockwise to required position
     while(curPos!=pos)
       doStep(1);
     break;
   case MOVE_MODE_OVERSHOOT:
-    // go anticlockwise to required position, less OVERSHOOT
+    // go to required position, less OVERSHOOT
+    if (curPos<0) dir = 1;
     while(curPos!=pos-OVERSHOOT)
-      doStep(0);
+      doStep(dir);
     // then go clockwise to required position
     while(curPos!=pos)
       doStep(1);
