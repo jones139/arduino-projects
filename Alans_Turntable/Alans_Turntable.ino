@@ -1,4 +1,31 @@
+/*  Alans_Turntable - Arduino based model railway turntable controller.
+ *   Copyright (C) 2017  Graham Jones & Alan Jones
+ *
+ *   This program is free software: you can redistribute it and/or modify
+ *   it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
 
+/* Electrical Connections
+ * Arduino connected to a stepper motor driver - motor controller step input
+ *  connected to STEP_PIN, motor controller direction input connected to
+ *  DIR_OUT_PIN.
+ *  5 off microswitches connecting pins POS_1_PIN to POS_5_PIN respectively
+ *  to ground (uses internal pull-up resistors).
+ *  1 microswitch connected to MOVE_PIN to manually MOVE_PIN to manually move
+ *   turntable, and one connected to DIR_OUT_PIN to select movement direction.
+ *  1 broken beam IR sensor connected to HOME_PIN to pull HOME_PIN low when
+ *    home position detected.
+ */
 #include <EEPROM.h>
 
 // Fixed Parameters
@@ -39,9 +66,15 @@ const int MOVE_MODE_OVERSHOOT = 2;
 // HYSTERESIS steps of backlash in the gearbox.
 const int MOVE_MODE_HYSTERESIS = 3; 
 
-int HYSTERESIS = 50;  // Number of steps of backlash in gears - only used for
+//////////////////////////////////////////////////////
+// Set the moveMode to handle hysteresis in gearbox //
+//////////////////////////////////////////////////////
+int moveMode = MOVE_MODE_OVERSHOOT;
+
+
+int HYSTERESIS = 90;  // Number of steps of backlash in gears - only used for
                       //  MOVE_MODE_HYSTERESIS
-int OVERSHOOT = 200;  // amount to overshoot required position, so we can
+int OVERSHOOT = 150;  // amount to overshoot required position, so we can
                       // approach from clockwise direction (only used for
                       //   MOVE_MODE_OVERSHOOT)
 
@@ -53,10 +86,6 @@ int curPos = 0;  // Current motor position.
 long lastPosReportTime = 0;  // last time we reported position to serial monitor.
 int programMode = 0;  // 0 = not programming 1-5 = setting preset 1-5.
 
-//////////////////////////////////////////////////////
-// Set the moveMode to handle hysteresis in gearbox //
-//////////////////////////////////////////////////////
-int moveMode = 0;
 
 /**
  * readPresets() - read the presets[] array from eeprom
@@ -134,42 +163,44 @@ void doStep(int dir) {
 void gotoPos(int pos) {
   int dir = 0;
 
-  switch (moveMode) {
-  case MOVE_MODE_SIMPLE:
-    if (curPos<pos) dir = 1;
-    while(curPos!=pos)
-      doStep(dir);
-    break;
-  case MOVE_MODE_TO_ZERO:
-    // go anticlockwise to zero position
-    if (curPos<0) dir = 1;
-    while(curPos!=0)
-      doStep(dir);
-    // then go clockwise to required position
-    while(curPos!=pos)
-      doStep(1);
-    break;
-  case MOVE_MODE_OVERSHOOT:
-    // go to required position, less OVERSHOOT
-    if (curPos<0) dir = 1;
-    while(curPos!=pos-OVERSHOOT)
-      doStep(dir);
-    // then go clockwise to required position
-    while(curPos!=pos)
-      doStep(1);
-    break;
-  case MOVE_MODE_HYSTERESIS:
-    if (curPos<pos) {
+  if (curPos!=pos) {
+    switch (moveMode) {
+    case MOVE_MODE_SIMPLE:
+      if (curPos<pos) dir = 1;
+      while(curPos!=pos)
+	doStep(dir);
+      break;
+    case MOVE_MODE_TO_ZERO:
+      // go anticlockwise to zero position
+      if (curPos<0) dir = 1;
+      while(curPos!=0)
+	doStep(dir);
       // then go clockwise to required position
       while(curPos!=pos)
 	doStep(1);
-    } else {
-      // go anticlockwise to required position, less HYSTERESIS
-      while(curPos!=pos-HYSTERESIS)
-	doStep(0);
       break;
-    }
-  }    
+    case MOVE_MODE_OVERSHOOT:
+      // go to required position, less OVERSHOOT
+      if (curPos<(pos-OVERSHOOT)) dir = 1;
+      while(curPos!=(pos-OVERSHOOT))
+	doStep(dir);
+      // then go clockwise to required position
+      while(curPos!=pos)
+	doStep(1);
+      break;
+    case MOVE_MODE_HYSTERESIS:
+      if (curPos<pos) {
+	// then go clockwise to required position
+	while(curPos!=pos)
+	  doStep(1);
+      } else {
+	// go anticlockwise to required position, less HYSTERESIS
+	while(curPos!=pos-HYSTERESIS)
+	  doStep(0);
+	break;
+      }
+    }    
+  }
 }
 
 
@@ -193,11 +224,10 @@ void findHome() {
  * returns the lowest id of the pressed buttons.
  */
 int getPresetButtonPressed() {
-  
- 
   int buttonId = 0;
   if (digitalRead(POS_5_PIN) == 0) {
     if (DEBUG) Serial.println("preset 5 pressed");
+    buttonId = 5;
   }
   if (digitalRead(POS_4_PIN) == 0) {
     if (DEBUG) Serial.println("Preset 4 Pressed");
